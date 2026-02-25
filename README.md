@@ -1,8 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/tiangolo/fastapi/master/docs/img/logo-margin/logo-teal.png" alt="FastAPI Logo" width="120"/>
-  <img src="https://www.python.org/static/community_logos/python-logo.png" alt="Python Logo" width="120"/>
-</p>
-
 # Student Management SaaS (Enterprise Edition)
 
 A high-performance, multi-tenant School Management System built with **FastAPI**, **SQLAlchemy 2.0**, and **PostgreSQL**. This platform is designed as a scalable SaaS where multiple schools (tenants) can manage students, academics, and finances in complete isolation.
