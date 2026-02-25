@@ -1,0 +1,103 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.exams import repository, schemas
+from app.attendance import repository as att_repo
+from app.auth.models import User
+from app.core.enums import UserRole
+from app.core.exceptions import (
+    ForbiddenException,
+    NotFoundException,
+    ConflictException,
+)
+
+
+async def create_new_exam(
+    db: AsyncSession,
+    exam_in: schemas.ExamCreate,
+    current_user: User,
+):
+    """
+    Creates a new exam session.
+
+    Policy:
+    - Only SCHOOL_ADMIN or TEACHER may create exam sessions.
+    - Exam must be scoped to requester's school.
+    - Prevent exact duplicates.
+    """
+
+    if current_user.role not in (UserRole.SCHOOL_ADMIN, UserRole.TEACHER):
+        raise ForbiddenException("Unauthorized.")
+
+    # Checking for duplicates to prevent DB crash
+    existing_exam = await repository.get_exam_by_details(
+        db,
+        current_user.school_id,
+        exam_in.name,
+        exam_in.year,
+        exam_in.term,
+        exam_in.subject_id
+    )
+
+    if existing_exam:
+        raise ConflictException(
+            code="EXAM_ALREADY_EXISTS",
+            message="An exam with this name, term, year, and subject already exists."
+        )
+
+    return await repository.create_exam(
+        db,
+        exam_in,
+        current_user.school_id,
+    )
+
+
+async def submit_marks(
+    db: AsyncSession,
+    data: schemas.BulkResultSubmit,
+    current_user: User,
+):
+    """
+    Bulk submission of student results.
+
+    Business Rules:
+    - Only SCHOOL_ADMIN or TEACHER may submit marks.
+    - Exam must belong to requester's school.
+    - All students must belong to specified class and school.
+    """
+
+    # Permission check
+    if current_user.role not in (UserRole.SCHOOL_ADMIN, UserRole.TEACHER):
+        raise ForbiddenException("Unauthorized.")
+
+    # Validate exam ownership
+    exam = await repository.get_exam_by_id(
+        db,
+        data.exam_id,
+        current_user.school_id,
+    )
+
+    if not exam:
+        raise NotFoundException("Exam session not found.")
+
+    # Validate students belong to class + school
+    student_ids = [r.student_id for r in data.results]
+
+    is_valid_group = await att_repo.validate_students_in_class(
+        db,
+        student_ids,
+        data.class_id,
+        current_user.school_id,
+    )
+
+    if not is_valid_group:
+        raise ConflictException(
+            code="INVALID_STUDENT_CLASS_MAPPING",
+            message="One or more students do not belong to the specified class/school.",
+        )
+
+    return await repository.sync_results(
+        db,
+        data.exam_id,
+        data.results,
+        current_user.school_id,
+    )

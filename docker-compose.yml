@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: saas_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: saas_admin
+      POSTGRES_PASSWORD: SecureDbPassword123!
+      POSTGRES_DB: school_saas_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas_admin -d school_saas_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: saas_fastapi
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://saas_admin:SecureDbPassword123!@db:5432/school_saas_db
+      - SECRET_KEY=your-super-secret-jwt-key-replace-in-production
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+    command: >
+        sh -c "alembic upgrade head && 
+         uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    # command: tail -f /dev/null
+
+volumes:
+  postgres_data:
