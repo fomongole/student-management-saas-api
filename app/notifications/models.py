@@ -1,6 +1,6 @@
 import uuid
 from typing import TYPE_CHECKING
-from sqlalchemy import String, Text, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Boolean, String, Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum
 
@@ -38,3 +38,4 @@ class Notification(TenantModel):
     status: Mapped[NotificationStatus] = mapped_column(SQLEnum(NotificationStatus), default=NotificationStatus.PENDING)
 
     recipient: Mapped["User"] = relationship("User")
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.parents import repository, schemas
@@ -6,6 +8,7 @@ from app.core.enums import UserRole
 from app.core.security import get_password_hash
 from app.auth import repository as auth_repo
 from app.core.exceptions import (
+    ConflictException,
     ForbiddenException,
     NotFoundException,
     UserEmailAlreadyExistsException,
@@ -73,3 +76,36 @@ async def fetch_my_children(
         )
         for s in students
     ]
+    
+async def get_school_parents(db: AsyncSession, current_user: User) -> list[User]:
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can view the parent directory.")
+    return await repository.get_all_parents(db, current_user.school_id)
+
+async def link_existing_parent(
+    db: AsyncSession, 
+    parent_id: uuid.UUID, 
+    data: schemas.ParentLinkCreate, 
+    current_user: User
+):
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Unauthorized.")
+
+    # Validate the new students belong to the school
+    is_valid = await repository.validate_students_exist(db, data.student_ids, current_user.school_id)
+    if not is_valid:
+        raise ConflictException("INVALID_STUDENTS", "One or more students do not exist in your school.")
+
+    return await repository.add_links_to_existing_parent(
+        db, parent_id, data.student_ids, current_user.school_id
+    )
+
+async def sever_parent_link(
+    db: AsyncSession, 
+    parent_id: uuid.UUID, 
+    student_id: uuid.UUID, 
+    current_user: User
+):
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Unauthorized.")
+    await repository.remove_parent_link(db, parent_id, student_id, current_user.school_id)

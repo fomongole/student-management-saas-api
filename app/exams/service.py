@@ -1,3 +1,6 @@
+from typing import List, Sequence
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exams import repository, schemas
@@ -9,6 +12,7 @@ from app.core.exceptions import (
     NotFoundException,
     ConflictException,
 )
+from app.exams.models import Exam
 
 
 async def create_new_exam(
@@ -101,3 +105,47 @@ async def submit_marks(
         data.results,
         current_user.school_id,
     )
+
+async def list_exam_sessions(
+    db: AsyncSession,
+    current_user: User,
+    year: int | None,
+    term: int | None,
+    subject_id: uuid.UUID | None
+) -> Sequence[Exam]:
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Unauthorized.")
+        
+    return await repository.get_all_exams(db, current_user.school_id, year, term, subject_id)
+
+async def generate_mark_sheet(
+    db: AsyncSession,
+    exam_id: uuid.UUID,
+    class_id: uuid.UUID,
+    current_user: User
+) -> List[schemas.StudentMarkSheetDetail]:
+    
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Only staff can view class mark sheets.")
+        
+    # Ensure exam actually exists and belongs to the school
+    exam = await repository.get_exam_by_id(db, exam_id, current_user.school_id)
+    if not exam:
+        raise NotFoundException("Exam session not found.")
+        
+    records = await repository.get_class_mark_sheet(
+        db, exam_id, class_id, current_user.school_id
+    )
+    
+    formatted_sheet = []
+    for student, result in records:
+        formatted_sheet.append(schemas.StudentMarkSheetDetail(
+            student_id=student.id,
+            first_name=student.user.first_name,
+            last_name=student.user.last_name,
+            admission_number=student.admission_number,
+            score=result.score if result else None,
+            teacher_comment=result.teacher_comment if result else None
+        ))
+        
+    return formatted_sheet

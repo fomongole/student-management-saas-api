@@ -8,6 +8,10 @@ from app.students.models import Student
 from app.core.enums import UserRole
 from app.fees.models import FeeStructure, FeePayment
 
+from sqlalchemy.orm import joinedload
+from app.students.models import Student
+from app.fees import repository as fee_repo
+
 async def get_population_metrics(db: AsyncSession, school_id: uuid.UUID) -> dict:
     """
     Optimized aggregation using relationships.
@@ -97,3 +101,29 @@ async def get_financial_metrics(db: AsyncSession, year: int, term: int, school_i
         "total_collected": total_paid,
         "outstanding_balance": float(total_billed - total_paid)
     }
+
+async def get_fee_defaulters(db: AsyncSession, year: int, term: int, school_id: uuid.UUID) -> list[dict]:
+    """
+    Finds all students with an outstanding balance for a specific term.
+    """
+    # 1. Fetch all students with their User profiles
+    students_query = select(Student).options(joinedload(Student.user)).where(Student.school_id == school_id)
+    students = (await db.execute(students_query)).scalars().all()
+    
+    defaulters = []
+    
+    for student in students:
+        # TODO(), batch this to avoid N+1 function calls!
+        finances = await fee_repo.get_student_financial_summary(db, student.id, year, term, school_id)
+        
+        if finances["outstanding_balance"] > 0:
+            defaulters.append({
+                "admission_number": student.admission_number,
+                "first_name": student.user.first_name,
+                "last_name": student.user.last_name,
+                "total_billed": finances["total_billed"],
+                "total_paid": finances["total_paid"],
+                "balance": finances["outstanding_balance"]
+            })
+            
+    return defaulters

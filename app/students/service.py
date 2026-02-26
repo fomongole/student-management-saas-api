@@ -1,7 +1,14 @@
+import uuid
+
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.students.schemas import (
+    StudentCreate,
+    StudentUpdate,
+    PaginatedStudentResponse
+)
 from app.students.schemas import StudentCreate
 from app.students.models import Student
 from app.students import repository as student_repo
@@ -110,3 +117,66 @@ async def onboard_student(
     )
 
     return saved_student
+
+
+# Add this alongside your existing onboard_student function
+async def get_paginated_students(
+    db: AsyncSession,
+    current_user: User,
+    skip: int,
+    limit: int,
+    class_id: uuid.UUID | None,
+    search: str | None
+) -> PaginatedStudentResponse:
+    
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("You are not authorized to view the student directory.")
+
+    total, students = await student_repo.get_students_with_pagination(
+        db, current_user.school_id, skip, limit, class_id, search
+    )
+    
+    # Flatten the SQLAlchemy entities for the frontend
+    formatted_items = []
+    for s in students:
+        formatted_items.append({
+            "id": s.id,
+            "user_id": s.user_id,
+            "class_id": s.class_id,
+            "admission_number": s.admission_number,
+            "first_name": s.user.first_name,
+            "last_name": s.user.last_name,
+            "email": s.user.email,
+            "class_name": s.class_relationship.name,
+            "guardian_name": s.guardian_name,
+            "guardian_contact": s.guardian_contact
+        })
+        
+    return PaginatedStudentResponse(total=total, items=formatted_items)
+
+
+async def update_student_profile(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    student_in: StudentUpdate,
+    current_user: User
+) -> Student:
+    
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can update student profiles.")
+        
+    student = await student_repo.get_student_with_user(db, student_id, current_user.school_id)
+    if not student:
+        raise NotFoundException("Student not found.")
+        
+    # If they are changing classes, verify the new class actually belongs to this school
+    if student_in.class_id:
+        class_query = select(Class).where(
+            Class.id == student_in.class_id, 
+            Class.school_id == current_user.school_id
+        )
+        if not (await db.execute(class_query)).scalar_one_or_none():
+            raise NotFoundException("Target class not found or invalid.")
+            
+    update_data = student_in.model_dump(exclude_unset=True)
+    return await student_repo.update_student_transaction(db, student, update_data)

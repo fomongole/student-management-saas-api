@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.teachers import schemas
 from app.teachers.schemas import TeacherCreate
 from app.teachers.models import Teacher
 from app.teachers import repository as teacher_repo
@@ -11,6 +12,9 @@ from app.core.exceptions import (
     ForbiddenException,
     UserEmailAlreadyExistsException,
 )
+
+import uuid
+from app.core.exceptions import NotFoundException
 
 
 async def onboard_teacher(
@@ -67,3 +71,37 @@ async def onboard_teacher(
         new_user,
         new_teacher,
     )
+
+async def get_paginated_teachers(
+    db: AsyncSession,
+    current_user: User,
+    skip: int,
+    limit: int,
+    search: str | None
+) -> schemas.PaginatedTeacherResponse:
+    
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("You are not authorized to view the staff directory.")
+
+    total, teachers = await teacher_repo.get_teachers_with_pagination(
+        db, current_user.school_id, skip, limit, search
+    )
+    
+    return schemas.PaginatedTeacherResponse(total=total, items=teachers)
+
+async def update_teacher_profile(
+    db: AsyncSession,
+    teacher_id: uuid.UUID,
+    teacher_in: schemas.TeacherUpdate,
+    current_user: User
+) -> Teacher:
+    
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can update teacher profiles.")
+        
+    teacher = await teacher_repo.get_teacher_with_user(db, teacher_id, current_user.school_id)
+    if not teacher:
+        raise NotFoundException("Teacher not found.")
+            
+    update_data = teacher_in.model_dump(exclude_unset=True)
+    return await teacher_repo.update_teacher_transaction(db, teacher, update_data)

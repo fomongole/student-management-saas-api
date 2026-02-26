@@ -5,6 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.students.models import Student
 from app.auth.models import User
 
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func, or_
+from app.classes.models import Class
+
 async def get_student(db: AsyncSession, student_id: uuid.UUID, school_id: uuid.UUID) -> Student | None:
     """
     Fetches a student by ID, strictly scoped to the tenant (school_id).
@@ -39,3 +43,78 @@ async def create_student_transaction(db: AsyncSession, new_user: User, new_stude
     new_student.user = new_user
     
     return new_student
+
+
+async def get_students_with_pagination(
+    db: AsyncSession, 
+    school_id: uuid.UUID, 
+    skip: int = 0, 
+    limit: int = 50,
+    class_id: uuid.UUID | None = None,
+    search: str | None = None
+) -> tuple[int, list[Student]]:
+    """
+    Highly optimized query with joins, filtering, and pagination.
+    """
+    # 1. Base Query using implicit joins to filter
+    query = select(Student).join(Student.user).join(Student.class_relationship).where(
+        Student.school_id == school_id
+    )
+    
+    # 2. Apply Optional Filters
+    if class_id:
+        query = query.where(Student.class_id == class_id)
+        
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            or_(
+                Student.admission_number.ilike(search_term),
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term),
+                User.email.ilike(search_term)
+            )
+        )
+        
+    # 3. Get Total Count (Crucial for frontend pagination)
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+    
+    # 4. Fetch the paginated records WITH relationships loaded
+    query = query.options(
+        joinedload(Student.user), 
+        joinedload(Student.class_relationship)
+    ).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    items = result.scalars().all()
+    
+    return total, list(items)
+
+async def get_student_with_user(db: AsyncSession, student_id: uuid.UUID, school_id: uuid.UUID) -> Student | None:
+    """Fetches a single student and eager-loads the User entity to prepare for updates."""
+    query = select(Student).options(joinedload(Student.user)).where(
+        and_(Student.id == student_id, Student.school_id == school_id)
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+async def update_student_transaction(db: AsyncSession, student: Student, update_data: dict) -> Student:
+    """Updates the Student and underlying User model in a single transaction."""
+    user = student.user
+    
+    for key, value in update_data.items():
+        if key in ['first_name', 'last_name']:
+            setattr(user, key, value)
+        elif hasattr(student, key):
+            setattr(student, key, value)
+            
+    db.add(user)
+    db.add(student)
+    await db.commit()
+    
+    # Refresh to ensure we return the latest DB state
+    await db.refresh(student)
+    await db.refresh(user)
+    student.user = user
+    return student

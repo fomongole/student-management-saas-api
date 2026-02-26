@@ -77,3 +77,62 @@ async def verify_parent_access(db: AsyncSession, parent_id: uuid.UUID, student_i
     )
     result = await db.execute(query)
     return result.scalar_one_or_none() is not None
+
+async def get_all_parents(db: AsyncSession, school_id: uuid.UUID) -> list[User]:
+    """Fetches all users with the PARENT role for a specific school."""
+    query = select(User).where(
+        and_(User.role == "PARENT", User.school_id == school_id)
+    ).order_by(User.last_name, User.first_name)
+    
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+async def add_links_to_existing_parent(
+    db: AsyncSession, 
+    parent_id: uuid.UUID, 
+    student_ids: list[uuid.UUID], 
+    school_id: uuid.UUID
+) -> list[ParentStudentLink]:
+    """Links new students to a parent, ignoring duplicates."""
+    # 1. Check existing links to prevent IntegrityError crashes
+    existing_query = select(ParentStudentLink.student_id).where(
+        ParentStudentLink.parent_id == parent_id
+    )
+    existing_students = (await db.execute(existing_query)).scalars().all()
+    
+    new_links = []
+    for s_id in student_ids:
+        if s_id not in existing_students:
+            link = ParentStudentLink(
+                parent_id=parent_id,
+                student_id=s_id,
+                school_id=school_id
+            )
+            db.add(link)
+            new_links.append(link)
+            
+    if new_links:
+        await db.flush()
+        await db.commit()
+        
+    return new_links
+
+async def remove_parent_link(
+    db: AsyncSession, 
+    parent_id: uuid.UUID, 
+    student_id: uuid.UUID, 
+    school_id: uuid.UUID
+) -> None:
+    """Severs the tie between a parent and a student."""
+    query = select(ParentStudentLink).where(
+        and_(
+            ParentStudentLink.parent_id == parent_id,
+            ParentStudentLink.student_id == student_id,
+            ParentStudentLink.school_id == school_id
+        )
+    )
+    link = (await db.execute(query)).scalar_one_or_none()
+    
+    if link:
+        await db.delete(link)
+        await db.commit()

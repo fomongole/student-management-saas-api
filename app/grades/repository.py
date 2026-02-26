@@ -77,3 +77,16 @@ async def get_student_report_data(
     
     result = await db.execute(query)
     return result.unique().scalar_one_or_none()
+
+async def get_tier_by_id(db: AsyncSession, tier_id: uuid.UUID, school_id: uuid.UUID) -> GradingScale | None:
+    """Fetches a specific grading tier by ID within the tenant."""
+    query = select(GradingScale).where(
+        and_(GradingScale.id == tier_id, GradingScale.school_id == school_id)
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+async def delete_tier(db: AsyncSession, tier: GradingScale) -> None:
+    """Removes a grading tier from the database."""
+    await db.delete(tier)
+    await db.commit()

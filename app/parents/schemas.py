@@ -26,3 +26,17 @@ class LinkedChildResponse(BaseModel):
     class_id: uuid.UUID
     
     model_config = ConfigDict(from_attributes=True)
+
+class ParentListResponse(BaseModel):
+    """Basic parent profile data for the Admin directory."""
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    email: EmailStr
+    is_active: bool
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class ParentLinkCreate(BaseModel):
+    """Payload to add students to an EXISTING parent."""
+    student_ids: list[uuid.UUID]

@@ -8,6 +8,9 @@ from app.subjects.schemas import SubjectCreate
 from app.teachers.models import Teacher
 from app.core.enums import AcademicLevel
 
+from typing import Sequence
+from sqlalchemy.orm import joinedload
+
 # --- READ OPERATIONS ---
 
 async def get_subject_by_code_and_level(
@@ -98,3 +101,39 @@ async def assign_subjects_to_teacher(
         await db.commit()
         
     return assignments
+
+async def get_all_subjects(
+    db: AsyncSession, 
+    school_id: uuid.UUID, 
+    level: AcademicLevel | None = None
+) -> Sequence[Subject]:
+    """Fetches the curriculum, optionally filtered by academic level."""
+    query = select(Subject).where(Subject.school_id == school_id).order_by(Subject.level, Subject.name)
+    if level:
+        query = query.where(Subject.level == level)
+        
+    result = await db.execute(query)
+    return result.scalars().all()
+
+async def get_subject_by_id(db: AsyncSession, subject_id: uuid.UUID, school_id: uuid.UUID) -> Subject | None:
+    """Fetches a single subject strictly within the tenant."""
+    query = select(Subject).where(and_(Subject.id == subject_id, Subject.school_id == school_id))
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+async def get_teacher_assignments(
+    db: AsyncSession, 
+    teacher_id: uuid.UUID, 
+    school_id: uuid.UUID
+) -> Sequence[TeacherSubject]:
+    """Fetches bridge records and eager-loads the underlying Subject details."""
+    query = select(TeacherSubject).options(joinedload(TeacherSubject.subject)).where(
+        and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
+async def delete_subject(db: AsyncSession, subject: Subject) -> None:
+    """Deletes a subject. Cascades will handle removing TeacherSubject bridge records."""
+    await db.delete(subject)
+    await db.commit()

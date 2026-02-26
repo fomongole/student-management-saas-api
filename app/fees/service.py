@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.fees import repository, schemas
 from app.auth.models import User
 from app.core.enums import UserRole
+from app.fees.models import FeeStructure
 from app.students import repository as student_repo
 from app.parents import repository as parent_repo
 from app.notifications.service import dispatch_alert
@@ -14,6 +15,7 @@ from app.core.exceptions import (
     NotFoundException,
     ConflictException,
 )
+from typing import Sequence
 
 
 async def setup_fee_structure(
@@ -172,3 +174,53 @@ async def get_student_balance(
         outstanding_balance=financials["total_billed"]
         - financials["total_paid"],
     )
+
+async def list_fee_structures(
+    db: AsyncSession,
+    year: int | None,
+    term: int | None,
+    current_user: User
+) -> Sequence[FeeStructure]:
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Unauthorized to view fee structures.")
+    
+    return await repository.get_all_fee_structures(db, current_user.school_id, year, term)
+
+async def get_student_payment_history(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    current_user: User
+) -> list[schemas.FeePaymentDetailResponse]:
+    """Retrieves detailed payment history with strict privacy checks."""
+    
+    # 1. Verify student exists in this school
+    student = await student_repo.get_student(db, student_id, current_user.school_id)
+    if not student:
+        raise NotFoundException("Student not found.")
+
+    # 2. Strict privacy enforcement (same as your balance logic)
+    if current_user.role == UserRole.STUDENT and student.user_id != current_user.id:
+        raise ForbiddenException("You can only view your own payment history.")
+    elif current_user.role == UserRole.PARENT:
+        is_linked = await parent_repo.verify_parent_access(
+            db, current_user.id, student_id, current_user.school_id
+        )
+        if not is_linked:
+            raise ForbiddenException("You are not linked to this student.")
+
+    # 3. Fetch records
+    payments = await repository.get_student_payments(db, student_id, current_user.school_id)
+    
+    # 4. Format for frontend
+    return [
+        schemas.FeePaymentDetailResponse(
+            id=p.id,
+            student_id=p.student_id,
+            fee_structure_id=p.fee_structure_id,
+            amount_paid=p.amount_paid,
+            payment_date=p.payment_date,
+            payment_method=p.payment_method,
+            reference_number=p.reference_number,
+            fee_structure_name=p.fee_structure.name
+        ) for p in payments
+    ]

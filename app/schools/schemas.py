@@ -1,5 +1,6 @@
 import uuid
 from pydantic import BaseModel, EmailStr, ConfigDict
+from typing import Optional
 
 class SchoolCreate(BaseModel):
     name: str
@@ -24,3 +25,21 @@ class PlatformMetrics(BaseModel):
 
 class SuperAdminDashboardResponse(BaseModel):
     platform_metrics: PlatformMetrics
+
+class SchoolUpdate(BaseModel):
+    """
+    Schema for updating a school. All fields are optional.
+    If 'is_active' is passed as False, it effectively suspends the tenant.
+    """
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SchoolWithCountResponse(SchoolResponse):
+    """
+    Inherits from SchoolResponse but adds the dynamically calculated student count.
+    Used specifically for the Super Admin data table.
+    """
+    student_count: int

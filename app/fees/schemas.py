@@ -42,3 +42,9 @@ class StudentBalanceResponse(BaseModel):
     total_billed: float
     total_paid: float
     outstanding_balance: float
+    
+class FeePaymentDetailResponse(FeePaymentResponse):
+    """Includes the name of the fee structure so the frontend can display 'Paid for Term 1 Tuition'."""
+    fee_structure_name: str
+    
+    model_config = ConfigDict(from_attributes=True)

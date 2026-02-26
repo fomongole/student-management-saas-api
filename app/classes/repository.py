@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.classes.models import Class
 from app.classes.schemas import ClassCreate
+from typing import Sequence
 
 async def get_class_by_details(db: AsyncSession, school_id: uuid.UUID, name: str, stream: str | None) -> Class | None:
     """Checks if a class with the same name and stream already exists in THIS specific school."""
@@ -31,3 +32,20 @@ async def create_class(db: AsyncSession, class_in: ClassCreate, school_id: uuid.
     await db.commit()
     await db.refresh(new_class)
     return new_class
+
+async def get_all_classes_for_school(db: AsyncSession, school_id: uuid.UUID) -> Sequence[Class]:
+    """Fetches all classes belonging to a specific school."""
+    query = select(Class).where(Class.school_id == school_id).order_by(Class.level, Class.name, Class.stream)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+async def get_class_by_id(db: AsyncSession, class_id: uuid.UUID, school_id: uuid.UUID) -> Class | None:
+    """Fetches a specific class, ensuring it belongs to the requesting admin's school."""
+    query = select(Class).where(Class.id == class_id, Class.school_id == school_id)
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+async def delete_class(db: AsyncSession, class_obj: Class) -> None:
+    """Deletes a class from the database."""
+    await db.delete(class_obj)
+    await db.commit()

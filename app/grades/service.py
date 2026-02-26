@@ -4,11 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.grades import repository, schemas
 from app.auth.models import User
 from app.core.enums import UserRole
+from app.grades.models import GradingScale
 from app.parents import repository as parent_repo
 from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,
 )
+from typing import Sequence
 
 async def add_grading_tier(
     db: AsyncSession,
@@ -103,3 +105,28 @@ async def generate_report_card(
         total_points=total_points,
         average_score=round(total_score / len(relevant_results), 2),
     )
+
+async def get_school_grading_scales(
+    db: AsyncSession, 
+    current_user: User
+) -> Sequence[GradingScale]:
+    """Retrieves all grading tiers for the admin's school."""
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Unauthorized to view academic settings.")
+        
+    return await repository.get_all_grading_tiers(db, current_user.school_id)
+
+async def remove_grading_tier(
+    db: AsyncSession, 
+    tier_id: uuid.UUID, 
+    current_user: User
+) -> None:
+    """Safely deletes a grading tier."""
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can modify academic policies.")
+        
+    tier = await repository.get_tier_by_id(db, tier_id, current_user.school_id)
+    if not tier:
+        raise NotFoundException("Grading tier not found.")
+        
+    await repository.delete_tier(db, tier)

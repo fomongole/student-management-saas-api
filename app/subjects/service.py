@@ -1,10 +1,13 @@
+import uuid
+from typing import Sequence
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.subjects import schemas
 from app.subjects.models import Subject, TeacherSubject
 from app.subjects import repository as subject_repo
 from app.auth.models import User
-from app.core.enums import UserRole
+from app.core.enums import AcademicLevel, UserRole
 from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,
@@ -101,3 +104,53 @@ async def assign_teacher_curriculum(
         assignment_in.subject_ids,
         current_user.school_id,
     )
+    
+async def list_school_subjects(
+    db: AsyncSession, 
+    current_user: User, 
+    level: AcademicLevel | None
+) -> Sequence[Subject]:
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Unauthorized to view curriculum.")
+    return await subject_repo.get_all_subjects(db, current_user.school_id, level)
+
+async def get_assigned_subjects_for_teacher(
+    db: AsyncSession, 
+    teacher_id: uuid.UUID, 
+    current_user: User
+) -> Sequence[TeacherSubject]:
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Unauthorized to view assignments.")
+    return await subject_repo.get_teacher_assignments(db, teacher_id, current_user.school_id)
+
+async def update_subject_details(
+    db: AsyncSession, 
+    subject_id: uuid.UUID, 
+    subject_in: schemas.SubjectUpdate, 
+    current_user: User
+) -> Subject:
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can update subjects.")
+        
+    subject = await subject_repo.get_subject_by_id(db, subject_id, current_user.school_id)
+    if not subject:
+        raise NotFoundException("Subject not found.")
+        
+    update_data = subject_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(subject, field, value)
+        
+    db.add(subject)
+    await db.commit()
+    await db.refresh(subject)
+    return subject
+
+async def remove_subject(db: AsyncSession, subject_id: uuid.UUID, current_user: User) -> None:
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can delete subjects.")
+        
+    subject = await subject_repo.get_subject_by_id(db, subject_id, current_user.school_id)
+    if not subject:
+        raise NotFoundException("Subject not found.")
+        
+    await subject_repo.delete_subject(db, subject)

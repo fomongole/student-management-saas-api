@@ -79,3 +79,16 @@ async def fetch_my_notifications(
         current_user.id,
         current_user.school_id,
     )
+    
+async def read_single_notification(
+    db: AsyncSession, 
+    notification_id: uuid.UUID, 
+    current_user: User
+) -> None:
+    await repository.mark_notification_as_read(db, notification_id, current_user.id)
+
+async def read_all_user_notifications(
+    db: AsyncSession, 
+    current_user: User
+) -> None:
+    await repository.mark_all_as_read(db, current_user.id, current_user.school_id)

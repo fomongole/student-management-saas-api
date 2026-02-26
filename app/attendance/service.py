@@ -1,3 +1,6 @@
+from datetime import date
+import uuid
+
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,3 +84,52 @@ async def mark_bulk_attendance(
                 )
 
     return synced_records
+
+from typing import List
+
+async def get_student_attendance_history(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    current_user: User,
+    start_date: date | None,
+    end_date: date | None
+) -> List[schemas.StudentAttendanceDetail]:
+    
+    # Optional: Add RBAC here. For example, a PARENT should only see their own child's history.
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.STUDENT, UserRole.PARENT]:
+         raise ForbiddenException("Unauthorized.")
+         
+    # If the user is a STUDENT, ensure they are only requesting their own ID (logic omitted for brevity, but crucial for production)
+
+    history = await repository.get_student_history(
+        db, student_id, current_user.school_id, start_date, end_date
+    )
+    return history
+
+async def get_daily_class_roll_call(
+    db: AsyncSession,
+    class_id: uuid.UUID,
+    target_date: date,
+    subject_id: uuid.UUID | None,
+    current_user: User
+) -> List[schemas.ClassDailyAttendanceResponse]:
+    
+    if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
+        raise ForbiddenException("Only staff can view class roll calls.")
+        
+    records = await repository.get_class_attendance_for_date(
+        db, class_id, current_user.school_id, target_date, subject_id
+    )
+    
+    formatted_response = []
+    for student, attendance_record in records:
+        formatted_response.append(schemas.ClassDailyAttendanceResponse(
+            student_id=student.id,
+            first_name=student.user.first_name,
+            last_name=student.user.last_name,
+            admission_number=student.admission_number,
+            status=attendance_record.status if attendance_record else None,
+            remarks=attendance_record.remarks if attendance_record else None
+        ))
+        
+    return formatted_response

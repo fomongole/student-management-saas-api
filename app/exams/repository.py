@@ -3,6 +3,10 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.exams.models import Exam, Result
 from app.exams import schemas
+from sqlalchemy.orm import joinedload
+from app.students.models import Student
+from app.auth.models import User
+from typing import Sequence
 
 async def get_exam_by_details(
     db: AsyncSession, school_id: uuid.UUID, name: str, year: int, term: int, subject_id: uuid.UUID
@@ -73,3 +77,54 @@ async def sync_results(
     await db.flush()
     await db.commit()
     return final_records
+
+async def get_all_exams(
+    db: AsyncSession, 
+    school_id: uuid.UUID, 
+    year: int | None = None, 
+    term: int | None = None,
+    subject_id: uuid.UUID | None = None
+) -> Sequence[Exam]:
+    """Fetches exam sessions with optional filtering for frontend dropdowns."""
+    query = select(Exam).where(Exam.school_id == school_id).order_by(Exam.year.desc(), Exam.term.desc(), Exam.name)
+    
+    if year:
+        query = query.where(Exam.year == year)
+    if term:
+        query = query.where(Exam.term == term)
+    if subject_id:
+        query = query.where(Exam.subject_id == subject_id)
+        
+    result = await db.execute(query)
+    return result.scalars().all()
+
+async def get_class_mark_sheet(
+    db: AsyncSession,
+    exam_id: uuid.UUID,
+    class_id: uuid.UUID,
+    school_id: uuid.UUID
+) -> list[tuple[Student, Result | None]]:
+    """
+    Returns ALL students in a class, joined with their exam score (if it exists).
+    Prevents N+1 queries by eager loading the User profile.
+    """
+    # Join condition for Results
+    result_conditions = and_(
+        Result.student_id == Student.id,
+        Result.exam_id == exam_id,
+        Result.school_id == school_id
+    )
+
+    query = (
+        select(Student, Result)
+        .join(Student.user)
+        .options(joinedload(Student.user))
+        .outerjoin(Result, result_conditions)
+        .where(
+            and_(Student.class_id == class_id, Student.school_id == school_id)
+        )
+        .order_by(User.last_name, User.first_name)
+    )
+    
+    result = await db.execute(query)
+    return list(result.all())

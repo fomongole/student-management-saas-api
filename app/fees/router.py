@@ -7,6 +7,9 @@ from app.core.dependencies import get_current_user
 from app.auth.models import User
 from app.fees import schemas, service
 
+from fastapi import Query
+from typing import List
+
 router = APIRouter()
 
 @router.post("/structure", response_model=schemas.FeeStructureResponse, status_code=status.HTTP_201_CREATED)
@@ -38,3 +41,22 @@ async def check_balance(
 ):
     """Retrieves the financial balance for a student."""
     return await service.get_student_balance(db, student_id, year, term, current_user)
+
+@router.get("/structure", response_model=List[schemas.FeeStructureResponse])
+async def get_structures(
+    year: int | None = Query(None, description="Filter by year"),
+    term: int | None = Query(None, description="Filter by term"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieves all billable fee structures."""
+    return await service.list_fee_structures(db, year, term, current_user)
+
+@router.get("/payment/student/{student_id}", response_model=List[schemas.FeePaymentDetailResponse])
+async def get_payment_history(
+    student_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieves the itemized payment history (receipts) for a student."""
+    return await service.get_student_payment_history(db, student_id, current_user)

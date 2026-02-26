@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.fees.models import FeeStructure, FeePayment
 from app.fees import schemas
 from app.students.models import Student
+from sqlalchemy.orm import joinedload
+from typing import Sequence
 
 async def create_fee_structure(db: AsyncSession, structure_in: schemas.FeeStructureCreate, school_id: uuid.UUID) -> FeeStructure:
     """Inserts a new billable fee structure."""
@@ -70,3 +72,39 @@ async def get_student_financial_summary(db: AsyncSession, student_id: uuid.UUID,
         "total_paid": float(total_paid),
         "outstanding_balance": float(total_billed - total_paid)
     }
+    
+
+async def get_all_fee_structures(
+    db: AsyncSession, 
+    school_id: uuid.UUID, 
+    year: int | None = None, 
+    term: int | None = None
+) -> Sequence[FeeStructure]:
+    """Fetches the billable items, optionally filtered by academic term."""
+    query = select(FeeStructure).where(FeeStructure.school_id == school_id)
+    
+    if year:
+        query = query.where(FeeStructure.year == year)
+    if term:
+        query = query.where(FeeStructure.term == term)
+        
+    query = query.order_by(FeeStructure.year.desc(), FeeStructure.term.desc(), FeeStructure.name)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+async def get_student_payments(
+    db: AsyncSession, 
+    student_id: uuid.UUID, 
+    school_id: uuid.UUID
+) -> Sequence[FeePayment]:
+    """Fetches a student's payment history, eager-loading the fee structure details."""
+    query = (
+        select(FeePayment)
+        .options(joinedload(FeePayment.fee_structure))
+        .where(
+            and_(FeePayment.student_id == student_id, FeePayment.school_id == school_id)
+        )
+        .order_by(FeePayment.payment_date.desc())
+    )
+    result = await db.execute(query)
+    return result.scalars().all()

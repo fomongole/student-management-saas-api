@@ -8,6 +8,10 @@ from app.attendance.schemas import StudentAttendanceIn
 from app.students.models import Student
 from app.core.enums import AttendanceStatus
 
+
+from sqlalchemy.orm import joinedload
+from app.auth.models import User
+
 # --- READ OPERATIONS ---
 
 async def validate_students_in_class(
@@ -97,3 +101,62 @@ async def sync_attendance_records(
     await db.commit()
         
     return final_records, alerts_to_trigger
+
+async def get_student_history(
+    db: AsyncSession, 
+    student_id: uuid.UUID, 
+    school_id: uuid.UUID,
+    start_date: date | None = None,
+    end_date: date | None = None
+) -> list[Attendance]:
+    """Fetches a student's attendance history, optionally filtered by a date range."""
+    query = select(Attendance).where(
+        and_(Attendance.student_id == student_id, Attendance.school_id == school_id)
+    ).order_by(Attendance.attendance_date.desc())
+    
+    if start_date:
+        query = query.where(Attendance.attendance_date >= start_date)
+    if end_date:
+        query = query.where(Attendance.attendance_date <= end_date)
+        
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+async def get_class_attendance_for_date(
+    db: AsyncSession,
+    class_id: uuid.UUID,
+    school_id: uuid.UUID,
+    target_date: date,
+    subject_id: uuid.UUID | None = None
+) -> list[tuple[Student, Attendance | None]]:
+    """
+    The 'Roll Call' Query: Returns ALL students in a class, joined with their 
+    attendance record for the specific date (if it exists).
+    """
+    # Create the condition for the attendance join
+    attendance_conditions = [
+        Attendance.student_id == Student.id,
+        Attendance.attendance_date == target_date,
+        Attendance.school_id == school_id
+    ]
+    
+    # If subject_id is provided, match exactly. If None, ensure we only join on daily (None) records.
+    if subject_id:
+        attendance_conditions.append(Attendance.subject_id == subject_id)
+    else:
+         attendance_conditions.append(Attendance.subject_id.is_(None))
+
+    query = (
+        select(Student, Attendance)
+        .join(Student.user) # Join User to get names for the UI
+        .options(joinedload(Student.user))
+        .outerjoin(Attendance, and_(*attendance_conditions))
+        .where(
+            and_(Student.class_id == class_id, Student.school_id == school_id)
+        )
+        .order_by(User.last_name, User.first_name)
+    )
+    
+    result = await db.execute(query)
+    # Returns a list of tuples: (Student_Object, Attendance_Object_Or_None)
+    return list(result.all())

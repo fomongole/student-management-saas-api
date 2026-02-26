@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.core.dependencies import get_current_user
 from app.auth.models import User
 from app.grades import schemas, service
+from typing import List
 
 router = APIRouter()
 
@@ -29,3 +30,20 @@ async def get_student_report(
 ):
     """Generates a comprehensive report card for a student."""
     return await service.generate_report_card(db, student_id, year, term, current_user)
+
+@router.get("/", response_model=List[schemas.GradingScaleResponse])
+async def list_grading_tiers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieves the complete grading scale configuration for the school."""
+    return await service.get_school_grading_scales(db, current_user)
+
+@router.delete("/{tier_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_grading_tier(
+    tier_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Removes a specific grade boundary from the school's grading scale."""
+    await service.remove_grading_tier(db, tier_id, current_user)

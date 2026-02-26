@@ -1,5 +1,6 @@
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Optional, List
 
 class ExamCreate(BaseModel):
     """Schema for creating a new Exam session."""
@@ -47,4 +48,15 @@ class ResultResponse(BaseModel):
     teacher_comment: str | None
     school_id: uuid.UUID
 
+    model_config = ConfigDict(from_attributes=True)
+
+class StudentMarkSheetDetail(BaseModel):
+    """Combines Student data with their Result for the frontend grid."""
+    student_id: uuid.UUID
+    first_name: str
+    last_name: str
+    admission_number: str
+    score: Optional[float] = None
+    teacher_comment: Optional[str] = None
+    
     model_config = ConfigDict(from_attributes=True)

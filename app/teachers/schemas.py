@@ -35,3 +35,28 @@ class TeacherResponse(BaseModel):
     user: UserBrief
     
     model_config = ConfigDict(from_attributes=True)
+    
+from typing import Optional, List
+
+class TeacherUpdate(BaseModel):
+    """Schema for updating a teacher and their underlying User profile."""
+    # User Profile Fields
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    
+    # Professional Details
+    employee_number: Optional[str] = None
+    qualification: Optional[str] = None
+    specialization: Optional[str] = None
+
+    @field_validator('employee_number')
+    @classmethod
+    def normalize_employee_number(cls, v: str | None) -> str | None:
+        if v is not None:
+            return v.strip().upper()
+        return v
+
+class PaginatedTeacherResponse(BaseModel):
+    """Wraps the list response with a total count for server-side pagination."""
+    total: int
+    items: List[TeacherResponse]

@@ -75,3 +75,24 @@ async def register_school_admin(
     Requires a valid JWT token from a SUPER_ADMIN.
     """
     return await service.create_school_admin(db, user_in, current_user)
+
+@router.get(
+    "/me", 
+    response_model=schemas.UserResponse, 
+    status_code=status.HTTP_200_OK
+)
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve the profile of the currently authenticated user.
+    
+    This endpoint expects a valid JWT Bearer token in the Authorization header.
+    It relies on the `get_current_user` dependency to validate the token and 
+    fetch the user from the database. 
+    
+    The frontend will call this endpoint immediately after a successful login 
+    (or on page refresh) to load the user's state, role, and school_id into memory 
+    for UI rendering and route guarding.
+    """
+    return current_user

@@ -47,3 +47,42 @@ async def get_user_notifications(db: AsyncSession, user_id: uuid.UUID, school_id
     )
     result = await db.execute(query)
     return result.scalars().all()
+
+async def mark_notification_as_read(
+    db: AsyncSession, 
+    notification_id: uuid.UUID, 
+    user_id: uuid.UUID
+) -> None:
+    """Marks a single notification as read, ensuring it belongs to the user."""
+    stmt = (
+        update(Notification)
+        .where(
+            and_(
+                Notification.id == notification_id,
+                Notification.recipient_id == user_id
+            )
+        )
+        .values(is_read=True)
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+async def mark_all_as_read(
+    db: AsyncSession, 
+    user_id: uuid.UUID, 
+    school_id: uuid.UUID
+) -> None:
+    """Bulk updates all unread notifications for a user."""
+    stmt = (
+        update(Notification)
+        .where(
+            and_(
+                Notification.recipient_id == user_id,
+                Notification.school_id == school_id,
+                Notification.is_read == False
+            )
+        )
+        .values(is_read=True)
+    )
+    await db.execute(stmt)
+    await db.commit()
