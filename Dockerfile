@@ -26,4 +26,7 @@ EXPOSE 8000
 
 # The command to start the server
 # This actually gets overriden in docker-compose to run migrations first
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# The command to start the server AND run migrations automatically
+CMD sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
