@@ -24,6 +24,7 @@ from app.fees.router import router as fees_router
 from app.notifications.router import router as notifications_router
 from app.parents.router import router as parents_router
 from app.reports.router import router as reports_router
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # Application
@@ -31,6 +32,14 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
