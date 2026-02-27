@@ -28,7 +28,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # 4. Override the database URL in alembic.ini with our dynamic environment variable
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Escape the '%' character by doubling it ('%%') so Alembic's configparser doesn't crash
+alembic_db_url = settings.DATABASE_URL.replace("%", "%%")
+config.set_main_option("sqlalchemy.url", alembic_db_url)
 
 # 5. Link Alembic to our fully populated SQLAlchemy models
 target_metadata = Base.metadata
