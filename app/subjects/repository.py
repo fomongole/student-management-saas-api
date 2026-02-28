@@ -97,31 +97,43 @@ async def assign_subjects_to_teacher(
     subject_ids: list[uuid.UUID],
     school_id: uuid.UUID
 ) -> list[TeacherSubject]:
-    """Bulk inserts the bridge records for many-to-many assignment safely."""
+    """Synchronizes the teacher's subject assignments (adds new, removes unchecked)."""
     
-    # 1. Fetch existing assignments to prevent IntegrityError crashes
-    existing_query = select(TeacherSubject.subject_id).where(
+    # 1. Fetch existing assignments AS FULL OBJECTS so we can delete them
+    existing_query = select(TeacherSubject).where(
         and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
     )
-    existing_subjects = (await db.execute(existing_query)).scalars().all()
+    existing_records = (await db.execute(existing_query)).scalars().all()
     
-    assignments = []
-    for s_id in subject_ids:
-        # Only assign if they don't already teach it
-        if s_id not in existing_subjects:
-            assignment = TeacherSubject(
-                teacher_id=teacher_id,
-                subject_id=s_id,
-                school_id=school_id
-            )
-            db.add(assignment)
-            assignments.append(assignment)
+    # Create sets for easy math comparisons
+    existing_subject_ids = {record.subject_id for record in existing_records}
+    requested_subject_ids = set(subject_ids)
     
-    if assignments:
-        await db.flush()
+    # 2. DELETE subjects that were unchecked in the frontend
+    ids_to_remove = existing_subject_ids - requested_subject_ids
+    for record in existing_records:
+        if record.subject_id in ids_to_remove:
+            await db.delete(record)
+            
+    # 3. ADD new subjects that were freshly checked
+    ids_to_add = requested_subject_ids - existing_subject_ids
+    for s_id in ids_to_add:
+        new_assignment = TeacherSubject(
+            teacher_id=teacher_id,
+            subject_id=s_id,
+            school_id=school_id
+        )
+        db.add(new_assignment)
+    
+    # 4. Commit the transaction if anything changed
+    if ids_to_remove or ids_to_add:
         await db.commit()
         
-    return assignments
+    # 5. Return the fresh list of assignments
+    updated_query = select(TeacherSubject).where(
+        and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
+    )
+    return list((await db.execute(updated_query)).scalars().all())
 
 async def get_all_subjects(db: AsyncSession, school_id: uuid.UUID, level: AcademicLevel | None = None) -> Sequence[Subject]:
     query = (
