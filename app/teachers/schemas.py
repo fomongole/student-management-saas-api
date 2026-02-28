@@ -30,8 +30,10 @@ class UserBrief(BaseModel):
 
 class TeacherSubjectBrief(BaseModel):
     """Minimal subject info for the Teacher table 'Current Load'."""
+    id: uuid.UUID
     name: str
     code: str
+    
     model_config = ConfigDict(from_attributes=True)
 
 class TeacherResponse(BaseModel):
