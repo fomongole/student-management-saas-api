@@ -1,5 +1,6 @@
 import uuid
 from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
+from typing import Optional, List
 
 class TeacherCreate(BaseModel):
     # User Account Details
@@ -27,6 +28,12 @@ class UserBrief(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+class TeacherSubjectBrief(BaseModel):
+    """Minimal subject info for the Teacher table 'Current Load'."""
+    name: str
+    code: str
+    model_config = ConfigDict(from_attributes=True)
+
 class TeacherResponse(BaseModel):
     id: uuid.UUID
     employee_number: str
@@ -34,10 +41,9 @@ class TeacherResponse(BaseModel):
     specialization: str | None
     school_id: uuid.UUID
     user: UserBrief
+    subjects: List[TeacherSubjectBrief] = []
     
     model_config = ConfigDict(from_attributes=True)
-    
-from typing import Optional, List
 
 class TeacherUpdate(BaseModel):
     """Schema for updating a teacher and their underlying User profile."""

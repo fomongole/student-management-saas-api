@@ -1,9 +1,10 @@
+import uuid
+from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
+
 from app.teachers.models import Teacher
 from app.auth.models import User
-from sqlalchemy.orm import joinedload
-from sqlalchemy import select, func, or_, and_
-import uuid
 
 async def create_teacher_transaction(db: AsyncSession, new_user: User, new_teacher: Teacher) -> Teacher:
     """Executes the database transaction to save the User and Teacher profiles."""
@@ -20,8 +21,10 @@ async def create_teacher_transaction(db: AsyncSession, new_user: User, new_teach
     await db.refresh(new_teacher)
     
     # 4. Manually attach the user object so Pydantic can serialize the TeacherResponse
-    # without triggering an implicit lazy-load query!
     new_teacher.user = new_user
+    
+    # Initialize empty subjects list for new teacher response
+    new_teacher.assigned_subjects = []
     
     return new_teacher
 
@@ -32,7 +35,11 @@ async def get_teachers_with_pagination(
     limit: int = 50,
     search: str | None = None
 ) -> tuple[int, list[Teacher]]:
-    """Fetches teachers with eager-loaded user profiles, supporting search and pagination."""
+    """
+    Fetches teachers with eager-loaded user profiles AND assigned subjects.
+    Supports search and pagination.
+    """
+    # Base query joined with User for filtering
     query = select(Teacher).join(Teacher.user).where(Teacher.school_id == school_id)
     
     if search:
@@ -50,8 +57,13 @@ async def get_teachers_with_pagination(
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
     
-    # Fetch paginated records WITH user relationship loaded
-    query = query.options(joinedload(Teacher.user)).offset(skip).limit(limit)
+    # Fetch paginated records
+    # joinedload(Teacher.user): many-to-one (User info)
+    # selectinload(Teacher.assigned_subjects): many-to-many (Curriculum info)
+    query = query.options(
+        joinedload(Teacher.user),
+        selectinload(Teacher.assigned_subjects)
+    ).offset(skip).limit(limit)
     
     result = await db.execute(query)
     items = result.scalars().all()
@@ -59,8 +71,11 @@ async def get_teachers_with_pagination(
     return total, list(items)
 
 async def get_teacher_with_user(db: AsyncSession, teacher_id: uuid.UUID, school_id: uuid.UUID) -> Teacher | None:
-    """Fetches a single teacher and eager-loads the User entity."""
-    query = select(Teacher).options(joinedload(Teacher.user)).where(
+    """Fetches a single teacher and eager-loads the User entity and assigned subjects."""
+    query = select(Teacher).options(
+        joinedload(Teacher.user),
+        selectinload(Teacher.assigned_subjects)
+    ).where(
         and_(Teacher.id == teacher_id, Teacher.school_id == school_id)
     )
     result = await db.execute(query)
@@ -80,7 +95,13 @@ async def update_teacher_transaction(db: AsyncSession, teacher: Teacher, update_
     db.add(teacher)
     await db.commit()
     
-    await db.refresh(teacher)
-    await db.refresh(user)
-    teacher.user = user
-    return teacher
+    # Refresh and re-load relationships to ensure clean state
+    query = select(Teacher).options(
+        joinedload(Teacher.user),
+        selectinload(Teacher.assigned_subjects)
+    ).where(Teacher.id == teacher.id)
+    
+    result = await db.execute(query)
+    updated_teacher = result.scalar_one()
+    
+    return updated_teacher

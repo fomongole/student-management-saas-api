@@ -18,6 +18,20 @@ class SubjectCreate(BaseModel):
             return v.strip().upper()
         return v
 
+class SubjectTeacherBrief(BaseModel):
+    """Minimal teacher info for the Subject table."""
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+
+    @field_validator('first_name', mode='before')
+    @classmethod
+    def get_first_name(cls, v, info):
+        # This helper extracts the name from the linked User model
+        if hasattr(info.data.get('user'), 'first_name'):
+            return info.data['user'].first_name
+        return v
+
 class SubjectResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -25,6 +39,7 @@ class SubjectResponse(BaseModel):
     level: AcademicLevel
     is_core: bool
     school_id: uuid.UUID
+    teachers: List[SubjectTeacherBrief] = [] 
     
     model_config = ConfigDict(from_attributes=True)
     

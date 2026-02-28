@@ -9,7 +9,7 @@ from app.teachers.models import Teacher
 from app.core.enums import AcademicLevel
 
 from typing import Sequence
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 # --- READ OPERATIONS ---
 
@@ -117,13 +117,14 @@ async def assign_subjects_to_teacher(
         
     return assignments
 
-async def get_all_subjects(
-    db: AsyncSession, 
-    school_id: uuid.UUID, 
-    level: AcademicLevel | None = None
-) -> Sequence[Subject]:
-    """Fetches the curriculum, optionally filtered by academic level."""
-    query = select(Subject).where(Subject.school_id == school_id).order_by(Subject.level, Subject.name)
+async def get_all_subjects(db: AsyncSession, school_id: uuid.UUID, level: AcademicLevel | None = None) -> Sequence[Subject]:
+    query = (
+        select(Subject)
+        .where(Subject.school_id == school_id)
+        # Eager load teachers and their underlying user names
+        .options(selectinload(Subject.assigned_teachers).joinedload(Teacher.user)) 
+        .order_by(Subject.level, Subject.name)
+    )
     if level:
         query = query.where(Subject.level == level)
         

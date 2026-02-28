@@ -32,6 +32,13 @@ class Teacher(TenantModel):
 
     # --- Relationships ---
     user: Mapped["User"] = relationship("User")
+    
+    assigned_subjects: Mapped[list["Subject"]] = relationship(
+        "Subject",
+        secondary="teacher_subjects",
+        back_populates="assigned_teachers",
+        viewonly=True
+    )
 
 
 class TeacherAssignment(TenantModel):

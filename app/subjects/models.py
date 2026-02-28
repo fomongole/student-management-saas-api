@@ -9,6 +9,7 @@ from app.core.enums import AcademicLevel
 
 if TYPE_CHECKING:
     from app.schools.models import School
+    from app.teachers.models import Teacher
 
 class Subject(TenantModel):
     """
@@ -28,6 +29,13 @@ class Subject(TenantModel):
     is_core: Mapped[bool] = mapped_column(Boolean, default=True)
     
     school: Mapped["School"] = relationship("School", back_populates="subjects")
+    
+    assigned_teachers: Mapped[list["Teacher"]] = relationship(
+        "Teacher",
+        secondary="teacher_subjects",
+        back_populates="assigned_subjects",
+        viewonly=True # We use this for reading names easily
+    )
 
     __table_args__ = (
         UniqueConstraint('school_id', 'code', 'level', name='_school_subject_code_level_uc'),
