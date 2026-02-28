@@ -1,5 +1,5 @@
 import uuid
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from app.core.enums import AcademicLevel
 from typing import Optional, List
 
@@ -19,18 +19,23 @@ class SubjectCreate(BaseModel):
         return v
 
 class SubjectTeacherBrief(BaseModel):
-    """Minimal teacher info for the Subject table."""
     id: uuid.UUID
     first_name: str
     last_name: str
 
-    @field_validator('first_name', mode='before')
+    @model_validator(mode='before')
     @classmethod
-    def get_first_name(cls, v, info):
-        # This helper extracts the name from the linked User model
-        if hasattr(info.data.get('user'), 'first_name'):
-            return info.data['user'].first_name
-        return v
+    def extract_user_names(cls, data):
+        # If 'data' is a SQLAlchemy Teacher object
+        if hasattr(data, 'user'):
+            return {
+                "id": data.id,
+                "first_name": data.user.first_name,
+                "last_name": data.user.last_name
+            }
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
 
 class SubjectResponse(BaseModel):
     id: uuid.UUID
