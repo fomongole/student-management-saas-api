@@ -30,9 +30,12 @@ class UserBrief(BaseModel):
 class TeacherResponse(BaseModel):
     id: uuid.UUID
     employee_number: str
+    qualification: str | None
     specialization: str | None
     school_id: uuid.UUID
     user: UserBrief
+    
+    model_config = ConfigDict(from_attributes=True)
     
     model_config = ConfigDict(from_attributes=True)
     
