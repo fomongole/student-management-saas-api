@@ -108,3 +108,22 @@ async def get_student_payments(
     )
     result = await db.execute(query)
     return result.scalars().all()
+
+async def get_fee_structure_by_id(db: AsyncSession, structure_id: uuid.UUID, school_id: uuid.UUID) -> FeeStructure | None:
+    """Fetches a specific fee structure."""
+    query = select(FeeStructure).where(
+        and_(FeeStructure.id == structure_id, FeeStructure.school_id == school_id)
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+async def update_fee_structure_transaction(db: AsyncSession, structure: FeeStructure, update_data: dict) -> FeeStructure:
+    """Handles the actual database transaction for updating the structure."""
+    for key, value in update_data.items():
+        setattr(structure, key, value)
+        
+    db.add(structure)
+    await db.commit()
+    await db.refresh(structure)
+    
+    return structure

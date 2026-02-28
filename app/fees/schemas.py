@@ -25,6 +25,14 @@ class FeePaymentCreate(BaseModel):
     amount_paid: float = Field(..., gt=0)
     payment_method: str = Field(..., max_length=50)
     reference_number: str = Field(..., max_length=100)
+    
+class FeeStructureUpdate(BaseModel):
+    """Schema for updating an existing fee structure. All fields are optional."""
+    name: str | None = Field(None, max_length=100)
+    amount: float | None = Field(None, gt=0)
+    year: int | None = None
+    term: int | None = None
+    class_id: uuid.UUID | None = None
 
 class FeePaymentResponse(BaseModel):
     id: uuid.UUID

@@ -60,3 +60,13 @@ async def get_payment_history(
 ):
     """Retrieves the itemized payment history (receipts) for a student."""
     return await service.get_student_payment_history(db, student_id, current_user)
+
+@router.patch("/structure/{structure_id}", response_model=schemas.FeeStructureResponse, status_code=status.HTTP_200_OK)
+async def update_structure(
+    structure_id: uuid.UUID,
+    structure_in: schemas.FeeStructureUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Updates an existing fee structure."""
+    return await service.update_fee_structure(db, structure_id, structure_in, current_user)

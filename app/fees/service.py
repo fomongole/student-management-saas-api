@@ -224,3 +224,25 @@ async def get_student_payment_history(
             fee_structure_name=p.fee_structure.name
         ) for p in payments
     ]
+
+async def update_fee_structure(
+    db: AsyncSession,
+    structure_id: uuid.UUID,
+    structure_in: schemas.FeeStructureUpdate,
+    current_user: User
+):
+    """
+    Business logic for updating a fee structure.
+    Enforces RBAC and delegates data persistence to the repository.
+    """
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can update fee structures.")
+        
+    structure = await repository.get_fee_structure_by_id(db, structure_id, current_user.school_id)
+    if not structure:
+        raise NotFoundException("Fee structure not found.")
+        
+    update_data = structure_in.model_dump(exclude_unset=True)
+    
+    # Strictly delegate the DB transaction to the repository
+    return await repository.update_fee_structure_transaction(db, structure, update_data)
