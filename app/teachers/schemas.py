@@ -37,8 +37,6 @@ class TeacherResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
     
-    model_config = ConfigDict(from_attributes=True)
-    
 from typing import Optional, List
 
 class TeacherUpdate(BaseModel):
