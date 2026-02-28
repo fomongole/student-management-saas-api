@@ -56,8 +56,10 @@ async def get_subjects_by_ids_and_school(
 
 # --- WRITE OPERATIONS ---
 
+# app/subjects/repository.py
+
 async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id: uuid.UUID) -> Subject:
-    """Saves a new subject to the database."""
+    """Saves a new subject to the database and optionally assigns a teacher."""
     new_subject = Subject(
         name=subject_in.name,
         code=subject_in.code,
@@ -65,7 +67,20 @@ async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id:
         is_core=subject_in.is_core,
         school_id=school_id
     )
+    
     db.add(new_subject)
+    # Flush to the DB immediately so we can get the new_subject.id without committing yet
+    await db.flush() 
+    
+    # If a teacher was selected on the frontend, assign them immediately!
+    if subject_in.teacher_id:
+        assignment = TeacherSubject(
+            teacher_id=subject_in.teacher_id,
+            subject_id=new_subject.id,
+            school_id=school_id
+        )
+        db.add(assignment)
+
     await db.commit()
     await db.refresh(new_subject)
     return new_subject

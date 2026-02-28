@@ -3,16 +3,17 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from app.core.enums import AcademicLevel
 from typing import Optional, List
 
+# Add teacher_id to the Create schema
 class SubjectCreate(BaseModel):
-    name: str           # e.g., "Mathematics"
-    code: str           # e.g., "MTC"
+    name: str           
+    code: str           
     level: AcademicLevel
     is_core: bool = True
+    teacher_id: Optional[uuid.UUID] = None
 
     @field_validator('name', 'code')
     @classmethod
     def normalize_strings(cls, v: str) -> str:
-        """Strips accidental spaces and standardizes casing to prevent DB duplicates."""
         if v:
             return v.strip().upper()
         return v
