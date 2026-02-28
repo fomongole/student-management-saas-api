@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 
-from app.schools.models import School
+from app.schools.models import School, SchoolConfiguration
 from app.schools.schemas import SchoolCreate
 from app.auth.models import User
 from app.students.models import Student
@@ -71,3 +71,31 @@ async def get_all_schools_with_counts(db: AsyncSession) -> list:
     )
     result = await db.execute(query)
     return result.all()
+
+async def get_school_config(db: AsyncSession, school_id: uuid.UUID) -> SchoolConfiguration:
+    """Fetches school configuration or creates default if missing."""
+    query = select(SchoolConfiguration).where(SchoolConfiguration.school_id == school_id)
+    result = await db.execute(query)
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        config = SchoolConfiguration(school_id=school_id)
+        db.add(config)
+        await db.commit()
+        await db.refresh(config)
+        
+    return config
+
+async def update_school_config_transaction(
+    db: AsyncSession, 
+    config: SchoolConfiguration, 
+    update_data: dict
+) -> SchoolConfiguration:
+    """Strict repository-layer DB mutation."""
+    for key, value in update_data.items():
+        setattr(config, key, value)
+    
+    db.add(config)
+    await db.commit()
+    await db.refresh(config)
+    return config

@@ -9,7 +9,7 @@ Whenever you create a new module (e.g., Library, Transport), import its models h
 from app.db.base import Base 
 
 from app.auth.models import User
-from app.schools.models import School
+from app.schools.models import School, SchoolConfiguration
 from app.classes.models import Class
 from app.students.models import Student
 from app.teachers.models import Teacher, TeacherAssignment 

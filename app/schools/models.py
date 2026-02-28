@@ -1,9 +1,9 @@
 from typing import List, TYPE_CHECKING
 from datetime import datetime
-from sqlalchemy import String, Boolean, Text, DateTime
+from sqlalchemy import String, Boolean, Text, DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import BaseModel
+from app.db.base import BaseModel, TenantModel
 
 if TYPE_CHECKING:
     from app.auth.models import User
@@ -44,3 +44,22 @@ class School(BaseModel):
     fee_structures: Mapped[List["FeeStructure"]] = relationship(
         "FeeStructure", back_populates="school", cascade="all, delete-orphan"
     )
+
+    # One-to-one relationship with Configuration
+    configuration: Mapped["SchoolConfiguration"] = relationship(
+        "SchoolConfiguration", back_populates="school", uselist=False, cascade="all, delete-orphan"
+    )
+
+class SchoolConfiguration(TenantModel):
+    """
+    Stores school-specific settings like the current term and year.
+    Uses TenantModel to ensure strict isolation via school_id.
+    """
+    __tablename__ = "school_configurations"
+
+    current_academic_year: Mapped[int] = mapped_column(Integer, default=2026)
+    current_term: Mapped[int] = mapped_column(Integer, default=1)
+    currency_symbol: Mapped[str] = mapped_column(String(10), default="UGX")
+
+    # Link back to school
+    school: Mapped["School"] = relationship("School", back_populates="configuration")

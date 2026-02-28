@@ -1,5 +1,5 @@
 import uuid
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import Optional
 
 class SchoolCreate(BaseModel):
@@ -17,6 +17,18 @@ class SchoolResponse(BaseModel):
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
+    
+class SchoolConfigResponse(BaseModel):
+    current_academic_year: int
+    current_term: int
+    currency_symbol: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class SchoolConfigUpdate(BaseModel):
+    current_academic_year: Optional[int] = None
+    current_term: Optional[int] = Field(None, ge=1, le=3)
+    currency_symbol: Optional[str] = None
 
 class PlatformMetrics(BaseModel):
     total_schools: int

@@ -61,3 +61,20 @@ async def update_school(
     Requires a valid JWT token from a SUPER_ADMIN.
     """
     return await service.update_school_details(db, school_id, school_in, current_user)
+
+@router.get("/settings", response_model=schemas.SchoolConfigResponse)
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieves current academic term and school settings."""
+    return await service.get_active_settings(db, current_user)
+
+@router.patch("/settings", response_model=schemas.SchoolConfigResponse)
+async def update_settings(
+    config_in: schemas.SchoolConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Updates the active academic period."""
+    return await service.update_settings(db, config_in, current_user)

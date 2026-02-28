@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schools import schemas, repository
-from app.schools.models import School
+from app.schools.models import School, SchoolConfiguration
 from app.auth.models import User
 from app.core.enums import UserRole
 from app.core.exceptions import (
@@ -104,3 +104,21 @@ async def update_school_details(
     await db.refresh(school)
     
     return school
+
+async def get_active_settings(db: AsyncSession, current_user: User) -> SchoolConfiguration:
+    """Any authenticated user in the school can view settings (needed for dashboards)."""
+    return await repository.get_school_config(db, current_user.school_id)
+
+async def update_settings(
+    db: AsyncSession, 
+    config_in: schemas.SchoolConfigUpdate, 
+    current_user: User
+) -> SchoolConfiguration:
+    """Only School Admins can change configuration."""
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can modify system configurations.")
+    
+    config = await repository.get_school_config(db, current_user.school_id)
+    update_data = config_in.model_dump(exclude_unset=True)
+    
+    return await repository.update_school_config_transaction(db, config, update_data)
