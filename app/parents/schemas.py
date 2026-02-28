@@ -23,7 +23,7 @@ class LinkedChildResponse(BaseModel):
     first_name: str
     last_name: str 
     admission_number: str
-    class_id: uuid.UUID
+    class_name: str
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -56,9 +56,6 @@ async def fetch_my_children(
     db: AsyncSession,
     current_user: User,
 ):
-    """
-    Returns the authenticated parent's linked children.
-    """
     if current_user.role != UserRole.PARENT:
         raise ForbiddenException("Only Parents can access this portal endpoint.")
 
@@ -72,7 +69,7 @@ async def fetch_my_children(
             first_name=s.user.first_name,
             last_name=s.user.last_name, 
             admission_number=s.admission_number,
-            class_id=s.class_id,
+            class_name=s.class_relationship.name,
         )
         for s in students
     ]

@@ -46,12 +46,13 @@ async def create_parent_and_links(
     return links
 
 async def get_children_for_parent(db: AsyncSession, parent_id: uuid.UUID, school_id: uuid.UUID) -> list[Student]:
-    """
-    Fetches the actual Student profiles linked to a specific Parent.
-    """
+    """Fetches the actual Student profiles linked to a specific Parent."""
     query = (
         select(Student)
-        .options(joinedload(Student.user)) 
+        .options(
+            joinedload(Student.user),
+            joinedload(Student.class_relationship)
+        ) 
         .join(ParentStudentLink, ParentStudentLink.student_id == Student.id)
         .where(
             and_(
