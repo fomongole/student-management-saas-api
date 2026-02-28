@@ -66,7 +66,7 @@ async def get_all_schools(db: AsyncSession, current_user: User) -> List[Dict[str
             "id": school.id,
             "name": school.name,
             "email": school.email,
-            "phone": school,
+            "phone": school.phone,
             "address": school.address,
             "is_active": school.is_active,
             "student_count": student_count
