@@ -41,7 +41,7 @@ class TeacherResponse(BaseModel):
     specialization: str | None
     school_id: uuid.UUID
     user: UserBrief
-    subjects: List[TeacherSubjectBrief] = []
+    assigned_subjects: List[TeacherSubjectBrief] = []
     
     model_config = ConfigDict(from_attributes=True)
 

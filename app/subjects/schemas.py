@@ -39,7 +39,7 @@ class SubjectResponse(BaseModel):
     level: AcademicLevel
     is_core: bool
     school_id: uuid.UUID
-    teachers: List[SubjectTeacherBrief] = [] 
+    assigned_teachers: List[SubjectTeacherBrief] = [] 
     
     model_config = ConfigDict(from_attributes=True)
     
