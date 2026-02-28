@@ -31,44 +31,34 @@ async def create_teacher_transaction(db: AsyncSession, new_user: User, new_teach
 async def get_teachers_with_pagination(
     db: AsyncSession, 
     school_id: uuid.UUID, 
-    skip: int = 0, 
-    limit: int = 50,
-    search: str | None = None
-) -> tuple[int, list[Teacher]]:
-    """
-    Fetches teachers with eager-loaded user profiles AND assigned subjects.
-    Supports search and pagination.
-    """
-    # Base query joined with User for filtering
-    query = select(Teacher).join(Teacher.user).where(Teacher.school_id == school_id)
+    skip: int, 
+    limit: int, 
+    search: str | None
+):
+    # Base Query
+    query = select(Teacher).where(Teacher.school_id == school_id)
     
-    if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            or_(
-                Teacher.employee_number.ilike(search_term),
-                User.first_name.ilike(search_term),
-                User.last_name.ilike(search_term),
-                User.email.ilike(search_term)
-            )
-        )
-        
-    # Get Total Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total = (await db.execute(count_query)).scalar() or 0
-    
-    # Fetch paginated records
-    # joinedload(Teacher.user): many-to-one (User info)
-    # selectinload(Teacher.assigned_subjects): many-to-many (Curriculum info)
+    # Eager Load Relationships
     query = query.options(
         joinedload(Teacher.user),
-        selectinload(Teacher.assigned_subjects)
-    ).offset(skip).limit(limit)
+        selectinload(Teacher.assigned_subjects) # Crucial for the modal checks
+    )
+
+    if search:
+        query = query.join(User).where(
+            or_(
+                User.first_name.ilike(f"%{search}%"),
+                User.last_name.ilike(f"%{search}%"),
+                Teacher.employee_number.ilike(f"%{search}%")
+            )
+        )
+
+    # Count & Execute
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.execute(count_query)
     
-    result = await db.execute(query)
-    items = result.scalars().all()
-    
-    return total, list(items)
+    result = await db.execute(query.offset(skip).limit(limit))
+    return total.scalar_one(), result.scalars().all()
 
 async def get_teacher_with_user(db: AsyncSession, teacher_id: uuid.UUID, school_id: uuid.UUID) -> Teacher | None:
     """Fetches a single teacher and eager-loads the User entity and assigned subjects."""

@@ -56,10 +56,8 @@ async def get_subjects_by_ids_and_school(
 
 # --- WRITE OPERATIONS ---
 
-# app/subjects/repository.py
-
 async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id: uuid.UUID) -> Subject:
-    """Saves a new subject to the database and optionally assigns a teacher."""
+    # 1. Atomic Create
     new_subject = Subject(
         name=subject_in.name,
         code=subject_in.code,
@@ -67,12 +65,9 @@ async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id:
         is_core=subject_in.is_core,
         school_id=school_id
     )
-    
     db.add(new_subject)
-    # Flush to the DB immediately so we can get the new_subject.id without committing yet
     await db.flush() 
     
-    # If a teacher was selected on the frontend, assign them immediately!
     if subject_in.teacher_id:
         assignment = TeacherSubject(
             teacher_id=subject_in.teacher_id,
@@ -80,10 +75,21 @@ async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id:
             school_id=school_id
         )
         db.add(assignment)
-
+    
     await db.commit()
-    await db.refresh(new_subject)
-    return new_subject
+
+    # 2. Explicitly load the relationship graph
+    # This prevents the 500 error during serialization
+    query = (
+        select(Subject)
+        .where(Subject.id == new_subject.id)
+        .options(
+            # Eager load teachers AND their user profiles in one go
+            selectinload(Subject.assigned_teachers).joinedload(Teacher.user)
+        )
+    )
+    result = await db.execute(query)
+    return result.scalar_one()
 
 async def assign_subjects_to_teacher(
     db: AsyncSession, 
