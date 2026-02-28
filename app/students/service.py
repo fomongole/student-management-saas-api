@@ -180,3 +180,27 @@ async def update_student_profile(
             
     update_data = student_in.model_dump(exclude_unset=True)
     return await student_repo.update_student_transaction(db, student, update_data)
+
+async def get_my_student_profile(db: AsyncSession, current_user: User):
+    """Retrieves the student profile for the authenticated student."""
+    if current_user.role != UserRole.STUDENT:
+        raise ForbiddenException("Only students can access this endpoint.")
+        
+    student = await student_repo.get_student_by_user_id(db, current_user.id, current_user.school_id)
+    
+    if not student:
+        raise NotFoundException("Student profile not found for this user.")
+        
+    # Format to match the StudentListResponse schema so the frontend gets the names
+    return {
+        "id": student.id,
+        "user_id": student.user_id,
+        "class_id": student.class_id,
+        "admission_number": student.admission_number,
+        "first_name": student.user.first_name,
+        "last_name": student.user.last_name,
+        "email": student.user.email,
+        "class_name": student.class_relationship.name,
+        "guardian_name": student.guardian_name,
+        "guardian_contact": student.guardian_contact
+    }

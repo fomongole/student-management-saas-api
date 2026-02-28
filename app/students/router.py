@@ -35,6 +35,14 @@ async def list_students(
     """
     return await service.get_paginated_students(db, current_user, skip, limit, class_id, search)
 
+@router.get("/me", response_model=schemas.StudentListResponse, status_code=status.HTTP_200_OK)
+async def get_my_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieves the student profile for the logged-in student."""
+    return await service.get_my_student_profile(db, current_user)
+
 @router.patch("/{student_id}", response_model=schemas.StudentResponse, status_code=status.HTTP_200_OK)
 async def update_student(
     student_id: uuid.UUID,

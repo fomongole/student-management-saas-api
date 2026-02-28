@@ -118,3 +118,18 @@ async def update_student_transaction(db: AsyncSession, student: Student, update_
     await db.refresh(user)
     student.user = user
     return student
+
+async def get_student_by_user_id(db: AsyncSession, user_id: uuid.UUID, school_id: uuid.UUID) -> Student | None:
+    """Fetches a student profile using their linked User account ID."""
+    query = (
+        select(Student)
+        .options(
+            joinedload(Student.user),
+            joinedload(Student.class_relationship)
+        )
+        .where(
+            and_(Student.user_id == user_id, Student.school_id == school_id)
+        )
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
