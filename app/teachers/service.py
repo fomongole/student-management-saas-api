@@ -105,3 +105,17 @@ async def update_teacher_profile(
             
     update_data = teacher_in.model_dump(exclude_unset=True)
     return await teacher_repo.update_teacher_transaction(db, teacher, update_data)
+
+async def get_my_teacher_profile(db: AsyncSession, current_user: User) -> Teacher:
+    """
+    Retrieves the teacher profile for the currently authenticated user.
+    """
+    if current_user.role != UserRole.TEACHER:
+        raise ForbiddenException("Only teachers can access this endpoint.")
+        
+    teacher = await teacher_repo.get_teacher_by_user_id(db, current_user.id, current_user.school_id)
+    
+    if not teacher:
+        raise NotFoundException("Teacher profile not found for this user.")
+        
+    return teacher

@@ -95,3 +95,14 @@ async def update_teacher_transaction(db: AsyncSession, teacher: Teacher, update_
     updated_teacher = result.scalar_one()
     
     return updated_teacher
+
+async def get_teacher_by_user_id(db: AsyncSession, user_id: uuid.UUID, school_id: uuid.UUID) -> Teacher | None:
+    """Fetches a teacher profile using their linked User account ID."""
+    query = select(Teacher).options(
+        joinedload(Teacher.user),
+        selectinload(Teacher.assigned_subjects)
+    ).where(
+        and_(Teacher.user_id == user_id, Teacher.school_id == school_id)
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()

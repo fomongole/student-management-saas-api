@@ -29,6 +29,14 @@ async def list_teachers(
     """Retrieves a paginated list of teachers for the school."""
     return await service.get_paginated_teachers(db, current_user, skip, limit, search)
 
+@router.get("/me", response_model=schemas.TeacherResponse, status_code=status.HTTP_200_OK)
+async def get_my_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieves the teacher profile and assigned subjects for the logged-in teacher."""
+    return await service.get_my_teacher_profile(db, current_user)
+
 @router.patch("/{teacher_id}", response_model=schemas.TeacherResponse, status_code=status.HTTP_200_OK)
 async def update_teacher(
     teacher_id: uuid.UUID,
