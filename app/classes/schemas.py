@@ -3,6 +3,16 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from app.core.enums import AcademicLevel
 from typing import Optional
 
+class TeacherUserBrief(BaseModel):
+    first_name: str
+    last_name: str
+    model_config = ConfigDict(from_attributes=True)
+
+class FormTeacherBrief(BaseModel):
+    id: uuid.UUID
+    user: TeacherUserBrief
+    model_config = ConfigDict(from_attributes=True)
+
 class ClassCreate(BaseModel):
     name: str                           
     stream: str | None = None           
@@ -25,6 +35,7 @@ class ClassResponse(BaseModel):
     capacity: int | None
     school_id: uuid.UUID
     form_teacher_id: uuid.UUID | None
+    form_teacher: FormTeacherBrief | None = None
     
     model_config = ConfigDict(from_attributes=True)
 
