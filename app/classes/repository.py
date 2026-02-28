@@ -26,7 +26,8 @@ async def create_class(db: AsyncSession, class_in: ClassCreate, school_id: uuid.
         stream=class_in.stream,
         level=class_in.level,
         capacity=class_in.capacity,
-        school_id=school_id  # Enforce Multi-tenancy!
+        school_id=school_id,  # Enforce Multi-tenancy!
+        form_teacher_id=class_in.form_teacher_id 
     )
     db.add(new_class)
     await db.commit()
