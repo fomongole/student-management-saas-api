@@ -53,3 +53,22 @@ async def get_mark_sheet(
     Returns all students in the class with their current scores (if any).
     """
     return await service.generate_mark_sheet(db, exam_id, class_id, current_user)
+
+@router.patch("/{exam_id}", response_model=schemas.ExamResponse)
+async def update_exam(
+    exam_id: uuid.UUID,
+    exam_in: schemas.ExamUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Updates an existing exam session."""
+    return await service.update_exam_details(db, exam_id, exam_in, current_user)
+
+@router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_exam(
+    exam_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Deletes an exam session (Blocked if marks are already entered)."""
+    await service.remove_exam_session(db, exam_id, current_user)

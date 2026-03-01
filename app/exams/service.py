@@ -149,3 +149,37 @@ async def generate_mark_sheet(
         ))
         
     return formatted_sheet
+
+async def update_exam_details(
+    db: AsyncSession, exam_id: uuid.UUID, exam_in: schemas.ExamUpdate, current_user: User
+):
+    if current_user.role not in (UserRole.SCHOOL_ADMIN, UserRole.TEACHER):
+        raise ForbiddenException("Unauthorized.")
+
+    exam = await repository.get_exam_by_id(db, exam_id, current_user.school_id)
+    if not exam:
+        raise NotFoundException("Exam session not found.")
+
+    update_data = exam_in.model_dump(exclude_unset=True)
+
+    # Check duplicates if core fields change
+    name = update_data.get("name", exam.name)
+    year = update_data.get("year", exam.year)
+    term = update_data.get("term", exam.term)
+    subject_id = update_data.get("subject_id", exam.subject_id)
+
+    existing = await repository.get_exam_by_details(
+        db, current_user.school_id, name, year, term, subject_id
+    )
+    if existing and existing.id != exam.id:
+        raise ConflictException("EXAM_ALREADY_EXISTS", "An identical exam session already exists.")
+
+    return await repository.update_exam(db, exam, update_data)
+
+async def remove_exam_session(db: AsyncSession, exam_id: uuid.UUID, current_user: User):
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can delete exam sessions.")
+
+    deleted = await repository.delete_exam_protected(db, exam_id, current_user.school_id)
+    if not deleted:
+        raise NotFoundException("Exam session not found.")
