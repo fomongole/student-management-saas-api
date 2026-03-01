@@ -141,3 +141,29 @@ async def get_student_by_user_id(db: AsyncSession, user_id: uuid.UUID, school_id
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
+
+async def update_student_transaction(db: AsyncSession, student: Student, update_data: dict) -> Student:
+    """Updates the Student and underlying User model in a single transaction."""
+    user = student.user
+    
+    for key, value in update_data.items():
+        if key in ['first_name', 'last_name']:
+            setattr(user, key, value)
+        elif hasattr(student, key):
+            setattr(student, key, value)
+            
+    # SECURITY: Revoke login access if student is marked as non-active
+    if "enrollment_status" in update_data:
+        if update_data["enrollment_status"] != "ACTIVE":
+            user.is_active = False  # Suspends login
+        else:
+            user.is_active = True   # Restores login
+
+    db.add(user)
+    db.add(student)
+    await db.commit()
+    
+    await db.refresh(student)
+    await db.refresh(user)
+    student.user = user
+    return student
