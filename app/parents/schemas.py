@@ -1,8 +1,8 @@
 import uuid
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from typing import Optional
 
 class ParentOnboardCreate(BaseModel):
-    """Payload for an Admin creating a new Parent account."""
     email: EmailStr
     password: str = Field(..., min_length=8)
     first_name: str
@@ -14,29 +14,31 @@ class ParentStudentLinkResponse(BaseModel):
     parent_id: uuid.UUID
     student_id: uuid.UUID
     school_id: uuid.UUID
-    
     model_config = ConfigDict(from_attributes=True)
 
 class LinkedChildResponse(BaseModel):
-    """Data returned to the Parent Portal dashboard."""
     student_id: uuid.UUID
     first_name: str
     last_name: str 
     admission_number: str
     class_name: str
-    
     model_config = ConfigDict(from_attributes=True)
 
 class ParentListResponse(BaseModel):
-    """Basic parent profile data for the Admin directory."""
     id: uuid.UUID
     first_name: str
     last_name: str
     email: EmailStr
     is_active: bool
+    children: list[LinkedChildResponse] = []
     
     model_config = ConfigDict(from_attributes=True)
 
 class ParentLinkCreate(BaseModel):
-    """Payload to add students to an EXISTING parent."""
     student_ids: list[uuid.UUID]
+
+class ParentUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None

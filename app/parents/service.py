@@ -74,10 +74,10 @@ async def fetch_my_children(
         for s in students
     ]
     
-async def get_school_parents(db: AsyncSession, current_user: User) -> list[User]:
+async def get_school_parents(db: AsyncSession, current_user: User) -> list[dict]:
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can view the parent directory.")
-    return await repository.get_all_parents(db, current_user.school_id)
+    return await repository.get_all_parents_with_children(db, current_user.school_id)
 
 async def link_existing_parent(
     db: AsyncSession, 
@@ -106,3 +106,31 @@ async def sever_parent_link(
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Unauthorized.")
     await repository.remove_parent_link(db, parent_id, student_id, current_user.school_id)
+    
+async def update_parent_profile(db: AsyncSession, parent_id: uuid.UUID, data: schemas.ParentUpdate, current_user: User):
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Unauthorized.")
+        
+    update_data = data.model_dump(exclude_unset=True)
+    
+    # Check email conflict
+    if "email" in update_data:
+        existing = await auth_repo.get_user_by_email(db, update_data["email"])
+        if existing and existing.id != parent_id:
+            raise UserEmailAlreadyExistsException()
+            
+    updated = await repository.update_parent_user(db, parent_id, current_user.school_id, update_data)
+    if not updated:
+        raise NotFoundException("Parent not found.")
+    
+    # We refetch the whole list object so the UI gets the children array back immediately
+    all_parents = await repository.get_all_parents_with_children(db, current_user.school_id)
+    return next((p for p in all_parents if p["id"] == parent_id), None)
+
+async def remove_parent_account(db: AsyncSession, parent_id: uuid.UUID, current_user: User):
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Unauthorized.")
+        
+    deleted = await repository.delete_parent_user(db, parent_id, current_user.school_id)
+    if not deleted:
+        raise NotFoundException("Parent not found.")

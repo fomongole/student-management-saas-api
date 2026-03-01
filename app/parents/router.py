@@ -54,3 +54,30 @@ async def unlink_student(
 ):
     """Removes a student from a parent's portal access."""
     await service.sever_parent_link(db, parent_id, student_id, current_user)
+    
+@router.get("/", response_model=list[schemas.ParentListResponse])
+async def list_parents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin endpoint to fetch the directory of parents and their linked children."""
+    return await service.get_school_parents(db, current_user)
+
+@router.patch("/{parent_id}", response_model=schemas.ParentListResponse)
+async def edit_parent(
+    parent_id: uuid.UUID,
+    data: schemas.ParentUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Updates parent details or suspends their account."""
+    return await service.update_parent_profile(db, parent_id, data, current_user)
+
+@router.delete("/{parent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_parent(
+    parent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Hard deletes a parent account. Safe operation; does not delete students."""
+    await service.remove_parent_account(db, parent_id, current_user)

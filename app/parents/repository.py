@@ -1,5 +1,6 @@
+from collections import defaultdict
 import uuid
-from sqlalchemy import select, and_, func
+from sqlalchemy import delete, select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -79,14 +80,49 @@ async def verify_parent_access(db: AsyncSession, parent_id: uuid.UUID, student_i
     result = await db.execute(query)
     return result.scalar_one_or_none() is not None
 
-async def get_all_parents(db: AsyncSession, school_id: uuid.UUID) -> list[User]:
-    """Fetches all users with the PARENT role for a specific school."""
-    query = select(User).where(
-        and_(User.role == "PARENT", User.school_id == school_id)
-    ).order_by(User.last_name, User.first_name)
+async def get_all_parents_with_children(db: AsyncSession, school_id: uuid.UUID) -> list[dict]:
+    """
+    Highly optimized fetch of all parents and their linked students.
+    """
+    # 1. Fetch Parents
+    parent_query = select(User).where(and_(User.role == "PARENT", User.school_id == school_id))
+    parents = (await db.execute(parent_query)).scalars().all()
     
-    result = await db.execute(query)
-    return list(result.scalars().all())
+    if not parents:
+        return []
+        
+    # 2. Fetch all linked students for these parents in one query
+    links_query = (
+        select(ParentStudentLink.parent_id, Student)
+        .join(Student, Student.id == ParentStudentLink.student_id)
+        .options(joinedload(Student.user), joinedload(Student.class_relationship))
+        .where(ParentStudentLink.school_id == school_id)
+    )
+    links = (await db.execute(links_query)).all()
+    
+    # 3. Map children to their respective parent IDs
+    children_map = defaultdict(list)
+    for parent_id, student in links:
+        children_map[parent_id].append({
+            "student_id": student.id,
+            "first_name": student.user.first_name,
+            "last_name": student.user.last_name,
+            "admission_number": student.admission_number,
+            "class_name": student.class_relationship.name
+        })
+        
+    # 4. Construct response dictionary
+    result = []
+    for p in parents:
+        result.append({
+            "id": p.id,
+            "first_name": p.first_name,
+            "last_name": p.last_name,
+            "email": p.email,
+            "is_active": p.is_active,
+            "children": children_map.get(p.id, [])
+        })
+    return result
 
 async def add_links_to_existing_parent(
     db: AsyncSession, 
@@ -137,3 +173,24 @@ async def remove_parent_link(
     if link:
         await db.delete(link)
         await db.commit()
+        
+async def update_parent_user(db: AsyncSession, parent_id: uuid.UUID, school_id: uuid.UUID, update_data: dict) -> User | None:
+    query = select(User).where(and_(User.id == parent_id, User.school_id == school_id, User.role == "PARENT"))
+    parent = (await db.execute(query)).scalar_one_or_none()
+    
+    if not parent:
+        return None
+        
+    for key, value in update_data.items():
+        setattr(parent, key, value)
+        
+    db.add(parent)
+    await db.commit()
+    await db.refresh(parent)
+    return parent
+
+async def delete_parent_user(db: AsyncSession, parent_id: uuid.UUID, school_id: uuid.UUID) -> bool:
+    stmt = delete(User).where(and_(User.id == parent_id, User.school_id == school_id, User.role == "PARENT"))
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount > 0
