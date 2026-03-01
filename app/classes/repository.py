@@ -1,19 +1,19 @@
 import uuid
-from sqlalchemy import select
+from typing import Sequence
+
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
-from typing import Sequence
 
 from app.classes.models import Class
 from app.classes.schemas import ClassCreate
 from app.teachers.models import Teacher
 from app.core.exceptions import ConflictException
 
+
 async def get_class_by_details(db: AsyncSession, school_id: uuid.UUID, name: str, stream: str | None) -> Class | None:
     """Checks if a class with the same name and stream already exists in THIS specific school."""
-    
-    # Explicit null check for stream to prevent database constraint failures
     stream_condition = Class.stream.is_(None) if stream is None else Class.stream == stream
     
     query = select(Class).where(
@@ -26,10 +26,7 @@ async def get_class_by_details(db: AsyncSession, school_id: uuid.UUID, name: str
 
 
 async def get_class_by_id(db: AsyncSession, class_id: uuid.UUID, school_id: uuid.UUID) -> Class | None:
-    """
-    Fetches a specific class. 
-    Uses selectinload to eagerly load the relationships safely in async.
-    """
+    """Fetches a specific class, safely loading teacher info for the UI."""
     query = (
         select(Class)
         .where(Class.id == class_id, Class.school_id == school_id)
@@ -40,7 +37,7 @@ async def get_class_by_id(db: AsyncSession, class_id: uuid.UUID, school_id: uuid
 
 
 async def create_class(db: AsyncSession, class_in: ClassCreate, school_id: uuid.UUID) -> Class:
-    """Saves a new class and returns the fully loaded object."""
+    """Saves a new class."""
     new_class = Class(
         name=class_in.name,
         stream=class_in.stream,
@@ -52,8 +49,8 @@ async def create_class(db: AsyncSession, class_in: ClassCreate, school_id: uuid.
     db.add(new_class)
     await db.commit()
     
-    # Fetch the complete object again to load relationships.
-    # This prevents the 500 error when Pydantic tries to serialize the form_teacher.
+    # We MUST re-fetch the object here so SQLAlchemy loads the form_teacher
+    # relationship. This prevents the 500 error when Pydantic serializes the response.
     return await get_class_by_id(db, new_class.id, school_id)
 
 
@@ -69,17 +66,25 @@ async def get_all_classes_for_school(db: AsyncSession, school_id: uuid.UUID) -> 
     return result.scalars().all()
 
 
-async def delete_class(db: AsyncSession, class_obj: Class) -> None:
-    """Deletes a class safely, handling foreign key restrictions."""
-    await db.delete(class_obj)
+async def delete_class_direct(db: AsyncSession, class_id: uuid.UUID, school_id: uuid.UUID) -> bool:
+    """
+    Industry-Standard Delete: Bypasses ORM memory completely to avoid async lazy-load crashes.
+    Sends a direct DELETE statement to Postgres.
+    """
+    stmt = delete(Class).where(
+        Class.id == class_id,
+        Class.school_id == school_id
+    )
     
     try:
+        result = await db.execute(stmt)
         await db.commit()
+        return result.rowcount > 0  # Returns True if a row was actually deleted
+        
     except IntegrityError:
-        # If the DB rejects the delete (e.g., students are inside the class),
-        # we roll back the session so it doesn't crash, and throw a clean domain error.
+        # Postgres blocked the deletion because foreign keys (like Students) exist!
         await db.rollback()
         raise ConflictException(
             code="CLASS_HAS_ENROLLMENTS",
-            message="Cannot delete this class. It currently has students or teacher assignments linked to it."
+            message="Cannot delete this class because it currently has students or fee structures linked to it."
         )
