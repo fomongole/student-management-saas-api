@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,6 +6,12 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.teachers.models import Teacher
 from app.auth.models import User
+
+async def generate_employee_number(db: AsyncSession, school_id: uuid.UUID) -> str:
+    current_year = datetime.now().year
+    query = select(func.count(Teacher.id)).where(Teacher.school_id == school_id)
+    count = (await db.execute(query)).scalar() or 0
+    return f"EMP-{current_year}-{(count + 1):03d}"
 
 async def create_teacher_transaction(db: AsyncSession, new_user: User, new_teacher: Teacher) -> Teacher:
     """Executes the database transaction to save the User and Teacher profiles."""

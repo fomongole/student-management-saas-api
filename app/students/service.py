@@ -33,45 +33,24 @@ async def onboard_student(
     current_user: User,
     background_tasks: BackgroundTasks,
 ) -> Student:
-    """
-    Onboards a student into a school.
-
-    Responsibilities:
-    - Enforces RBAC (SCHOOL_ADMIN only)
-    - Validates class ownership within school
-    - Ensures student email uniqueness
-    - Creates User + Student profile transactionally
-    - Dispatches welcome notification asynchronously
-
-    Security:
-    - Prevents cross-school class injection
-    - Prevents duplicate identity registration
-    """
-
-    # 1. RBAC enforcement
+    
     if current_user.role != UserRole.SCHOOL_ADMIN:
-        raise ForbiddenException(
-            "Only School Admins can admit students."
-        )
+        raise ForbiddenException("Only School Admins can admit students.")
 
-    # 2. Validate class belongs to this school
     class_query = select(Class).where(
         Class.id == student_in.class_id,
         Class.school_id == current_user.school_id,
     )
-    result = await db.execute(class_query)
-    existing_class = result.scalar_one_or_none()
+    if not (await db.execute(class_query)).scalar_one_or_none():
+        raise NotFoundException("Class not found or does not belong to your school.")
 
-    if not existing_class:
-        raise NotFoundException(
-            "Class not found or does not belong to your school."
-        )
-
-    # 3. Email uniqueness
     if await auth_repo.get_user_by_email(db, student_in.email):
         raise UserEmailAlreadyExistsException()
 
-    # 4. Build User entity
+    generated_admission_number = await student_repo.generate_admission_number(
+        db, current_user.school_id
+    )
+
     new_user = User(
         email=student_in.email,
         hashed_password=get_password_hash(student_in.password),
@@ -81,29 +60,19 @@ async def onboard_student(
         school_id=current_user.school_id,
     )
 
-    # 5. Build Student profile entity
     new_student = Student(
         class_id=student_in.class_id,
-        admission_number=student_in.admission_number,
+        admission_number=generated_admission_number,
         date_of_birth=student_in.date_of_birth,
-        guardian_name=student_in.guardian_name,
-        guardian_contact=student_in.guardian_contact,
         school_id=current_user.school_id,
     )
 
-    # 6. Persist transactionally
-    saved_student = await student_repo.create_student_transaction(
-        db,
-        new_user,
-        new_student,
-    )
+    saved_student = await student_repo.create_student_transaction(db, new_user, new_student)
 
-    # 7. Dispatch welcome notification asynchronously
     welcome_message = (
         f"Welcome to the school, {student_in.first_name}! "
-        f"Your admission number is {student_in.admission_number}. "
-        f"You can now log in using your email ({student_in.email}) "
-        f"and the password provided during registration."
+        f"Your admission number is {generated_admission_number}. "
+        f"You can now log in using your email ({student_in.email})."
     )
 
     await dispatch_alert(
@@ -148,8 +117,7 @@ async def get_paginated_students(
             "last_name": s.user.last_name,
             "email": s.user.email,
             "class_name": s.class_relationship.name,
-            "guardian_name": s.guardian_name,
-            "guardian_contact": s.guardian_contact
+            "parents": s.parents
         })
         
     return PaginatedStudentResponse(total=total, items=formatted_items)

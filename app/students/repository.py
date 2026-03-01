@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,9 +6,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.students.models import Student
 from app.auth.models import User
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import func, or_
 from app.classes.models import Class
+
+async def generate_admission_number(db: AsyncSession, school_id: uuid.UUID) -> str:
+    """
+    Counts current students and generates a sequence: ADM-2026-0001
+    Safe from race conditions due to the DB UniqueConstraint.
+    """
+    current_year = datetime.now().year
+    query = select(func.count(Student.id)).where(Student.school_id == school_id)
+    count = (await db.execute(query)).scalar() or 0
+    
+    return f"ADM-{current_year}-{(count + 1):04d}"
+
 
 async def get_student(db: AsyncSession, student_id: uuid.UUID, school_id: uuid.UUID) -> Student | None:
     """
@@ -53,15 +66,11 @@ async def get_students_with_pagination(
     class_id: uuid.UUID | None = None,
     search: str | None = None
 ) -> tuple[int, list[Student]]:
-    """
-    Highly optimized query with joins, filtering, and pagination.
-    """
-    # 1. Base Query using implicit joins to filter
+    
     query = select(Student).join(Student.user).join(Student.class_relationship).where(
         Student.school_id == school_id
     )
     
-    # 2. Apply Optional Filters
     if class_id:
         query = query.where(Student.class_id == class_id)
         
@@ -76,14 +85,13 @@ async def get_students_with_pagination(
             )
         )
         
-    # 3. Get Total Count (Crucial for frontend pagination)
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
     
-    # 4. Fetch the paginated records WITH relationships loaded
     query = query.options(
         joinedload(Student.user), 
-        joinedload(Student.class_relationship)
+        joinedload(Student.class_relationship),
+        selectinload(Student.parents) 
     ).offset(skip).limit(limit)
     
     result = await db.execute(query)
