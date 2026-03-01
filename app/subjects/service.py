@@ -21,13 +21,7 @@ async def create_new_subject(
 ) -> Subject:
     """
     Creates a new subject within a school.
-
-    Business Rules:
-    - Only SCHOOL_ADMIN may create subjects
-    - Subject code must be unique within level & school
-    - Subject must belong to admin's school
     """
-
     # 1. RBAC enforcement
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Unauthorized.")
@@ -60,19 +54,11 @@ async def assign_teacher_curriculum(
 ) -> list[TeacherSubject]:
     """
     Assigns multiple subjects to a teacher.
-
-    Business Rules:
-    - Only SCHOOL_ADMIN may assign subjects
-    - Teacher must belong to the requesting admin's school
-    - All subjects must belong to same school
-    - Assignment executed transactionally
     """
-
-    # 1. Missing RBAC enforcement FIXED
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can assign subjects.")
 
-    # 2. Validate teacher ownership
+    # Validate teacher ownership
     teacher = await subject_repo.get_teacher_by_id_and_school(
         db,
         assignment_in.teacher_id,
@@ -84,7 +70,7 @@ async def assign_teacher_curriculum(
             "Teacher not found in your school."
         )
 
-    # 3. Validate subject ownership
+    # Validate subject ownership
     found_subjects = await subject_repo.get_subjects_by_ids_and_school(
         db,
         assignment_in.subject_ids,
@@ -97,7 +83,7 @@ async def assign_teacher_curriculum(
             message="One or more subjects are invalid or belong to another school.",
         )
 
-    # 4. Persist assignments
+    # Persist assignments
     return await subject_repo.assign_subjects_to_teacher(
         db,
         assignment_in.teacher_id,
@@ -142,7 +128,10 @@ async def update_subject_details(
         
     db.add(subject)
     await db.commit()
-    await db.refresh(subject)
+    
+    # DO NOT use db.refresh(subject). 
+    # Instead, we just return the object because we didn't change any relational data. 
+    # If the frontend needs the full teacher list again, it will refetch it via invalidateQueries.
     return subject
 
 async def remove_subject(db: AsyncSession, subject_id: uuid.UUID, current_user: User) -> None:
