@@ -1,12 +1,14 @@
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_
+from sqlalchemy import and_, delete
+from sqlalchemy.exc import IntegrityError
 
 from app.subjects.models import Subject, TeacherSubject
 from app.subjects.schemas import SubjectCreate
 from app.teachers.models import Teacher
 from app.core.enums import AcademicLevel
+from app.core.exceptions import ConflictException
 
 from typing import Sequence
 from sqlalchemy.orm import joinedload, selectinload
@@ -19,7 +21,6 @@ async def get_subject_by_code_and_level(
     code: str, 
     level: AcademicLevel
 ) -> Subject | None:
-    """SQL logic to find a subject by code and level within a tenant."""
     query = select(Subject).where(
         and_(
             Subject.school_id == school_id, 
@@ -35,7 +36,6 @@ async def get_teacher_by_id_and_school(
     teacher_id: uuid.UUID, 
     school_id: uuid.UUID
 ) -> Teacher | None:
-    """SQL logic to verify a teacher exists and belongs to the school."""
     query = select(Teacher).where(
         and_(Teacher.id == teacher_id, Teacher.school_id == school_id)
     )
@@ -47,7 +47,6 @@ async def get_subjects_by_ids_and_school(
     subject_ids: list[uuid.UUID], 
     school_id: uuid.UUID
 ) -> list[Subject]:
-    """SQL logic to fetch multiple subjects only if they belong to the tenant."""
     query = select(Subject).where(
         and_(Subject.id.in_(subject_ids), Subject.school_id == school_id)
     )
@@ -57,7 +56,6 @@ async def get_subjects_by_ids_and_school(
 # --- WRITE OPERATIONS ---
 
 async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id: uuid.UUID) -> Subject:
-    # 1. Atomic Create
     new_subject = Subject(
         name=subject_in.name,
         code=subject_in.code,
@@ -78,18 +76,8 @@ async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id:
     
     await db.commit()
 
-    # 2. Explicitly load the relationship graph
-    # This prevents the 500 error during serialization
-    query = (
-        select(Subject)
-        .where(Subject.id == new_subject.id)
-        .options(
-            # Eager load teachers AND their user profiles in one go
-            selectinload(Subject.assigned_teachers).joinedload(Teacher.user)
-        )
-    )
-    result = await db.execute(query)
-    return result.scalar_one()
+    # Re-fetch to load relationships
+    return await get_subject_by_id(db, new_subject.id, school_id)
 
 async def assign_subjects_to_teacher(
     db: AsyncSession, 
@@ -97,25 +85,20 @@ async def assign_subjects_to_teacher(
     subject_ids: list[uuid.UUID],
     school_id: uuid.UUID
 ) -> list[TeacherSubject]:
-    """Synchronizes the teacher's subject assignments (adds new, removes unchecked)."""
     
-    # 1. Fetch existing assignments AS FULL OBJECTS so we can delete them
     existing_query = select(TeacherSubject).where(
         and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
     )
     existing_records = (await db.execute(existing_query)).scalars().all()
     
-    # Create sets for easy math comparisons
     existing_subject_ids = {record.subject_id for record in existing_records}
     requested_subject_ids = set(subject_ids)
     
-    # 2. DELETE subjects that were unchecked in the frontend
     ids_to_remove = existing_subject_ids - requested_subject_ids
     for record in existing_records:
         if record.subject_id in ids_to_remove:
             await db.delete(record)
             
-    # 3. ADD new subjects that were freshly checked
     ids_to_add = requested_subject_ids - existing_subject_ids
     for s_id in ids_to_add:
         new_assignment = TeacherSubject(
@@ -125,11 +108,9 @@ async def assign_subjects_to_teacher(
         )
         db.add(new_assignment)
     
-    # 4. Commit the transaction if anything changed
     if ids_to_remove or ids_to_add:
         await db.commit()
         
-    # 5. Return the fresh list of assignments
     updated_query = select(TeacherSubject).where(
         and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
     )
@@ -139,7 +120,6 @@ async def get_all_subjects(db: AsyncSession, school_id: uuid.UUID, level: Academ
     query = (
         select(Subject)
         .where(Subject.school_id == school_id)
-        # Eager load teachers and their underlying user names
         .options(selectinload(Subject.assigned_teachers).joinedload(Teacher.user)) 
         .order_by(Subject.level, Subject.name)
     )
@@ -150,8 +130,15 @@ async def get_all_subjects(db: AsyncSession, school_id: uuid.UUID, level: Academ
     return result.scalars().all()
 
 async def get_subject_by_id(db: AsyncSession, subject_id: uuid.UUID, school_id: uuid.UUID) -> Subject | None:
-    """Fetches a single subject strictly within the tenant."""
-    query = select(Subject).where(and_(Subject.id == subject_id, Subject.school_id == school_id))
+    """
+    Fetches a single subject strictly within the tenant.
+    Eagerly loads teachers to prevent 500 errors on edit serialization!
+    """
+    query = (
+        select(Subject)
+        .where(and_(Subject.id == subject_id, Subject.school_id == school_id))
+        .options(selectinload(Subject.assigned_teachers).joinedload(Teacher.user))
+    )
     result = await db.execute(query)
     return result.scalar_one_or_none()
 
@@ -160,14 +147,22 @@ async def get_teacher_assignments(
     teacher_id: uuid.UUID, 
     school_id: uuid.UUID
 ) -> Sequence[TeacherSubject]:
-    """Fetches bridge records and eager-loads the underlying Subject details."""
     query = select(TeacherSubject).options(joinedload(TeacherSubject.subject)).where(
         and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
     )
     result = await db.execute(query)
     return result.scalars().all()
 
-async def delete_subject(db: AsyncSession, subject: Subject) -> None:
-    """Deletes a subject. Cascades will handle removing TeacherSubject bridge records."""
-    await db.delete(subject)
-    await db.commit()
+# Safe, direct deletion
+async def delete_subject_direct(db: AsyncSession, subject_id: uuid.UUID, school_id: uuid.UUID) -> bool:
+    stmt = delete(Subject).where(and_(Subject.id == subject_id, Subject.school_id == school_id))
+    try:
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.rowcount > 0
+    except IntegrityError:
+        await db.rollback()
+        raise ConflictException(
+            code="SUBJECT_IN_USE",
+            message="Cannot delete this subject because it has been assigned to an exam session."
+        )

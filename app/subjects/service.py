@@ -19,92 +19,43 @@ async def create_new_subject(
     subject_in: schemas.SubjectCreate,
     current_user: User,
 ) -> Subject:
-    """
-    Creates a new subject within a school.
-    """
-    # 1. RBAC enforcement
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Unauthorized.")
 
-    # 2. Uniqueness check
     existing = await subject_repo.get_subject_by_code_and_level(
-        db,
-        current_user.school_id,
-        subject_in.code,
-        subject_in.level,
+        db, current_user.school_id, subject_in.code, subject_in.level,
     )
-
     if existing:
-        raise ConflictException(
-            code="SUBJECT_ALREADY_EXISTS",
-            message="Subject code already exists for this level.",
-        )
+        raise ConflictException("SUBJECT_ALREADY_EXISTS", "Subject code already exists for this level.")
 
-    # 3. Persist
-    return await subject_repo.create_subject(
-        db,
-        subject_in,
-        current_user.school_id,
-    )
+    return await subject_repo.create_subject(db, subject_in, current_user.school_id)
 
 async def assign_teacher_curriculum(
     db: AsyncSession,
     assignment_in: schemas.SubjectAssignment,
     current_user: User,
 ) -> list[TeacherSubject]:
-    """
-    Assigns multiple subjects to a teacher.
-    """
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can assign subjects.")
 
-    # Validate teacher ownership
-    teacher = await subject_repo.get_teacher_by_id_and_school(
-        db,
-        assignment_in.teacher_id,
-        current_user.school_id,
-    )
-
+    teacher = await subject_repo.get_teacher_by_id_and_school(db, assignment_in.teacher_id, current_user.school_id)
     if not teacher:
-        raise NotFoundException(
-            "Teacher not found in your school."
-        )
+        raise NotFoundException("Teacher not found in your school.")
 
-    # Validate subject ownership
-    found_subjects = await subject_repo.get_subjects_by_ids_and_school(
-        db,
-        assignment_in.subject_ids,
-        current_user.school_id,
-    )
-
+    found_subjects = await subject_repo.get_subjects_by_ids_and_school(db, assignment_in.subject_ids, current_user.school_id)
     if len(found_subjects) != len(assignment_in.subject_ids):
-        raise ConflictException(
-            code="INVALID_SUBJECT_SELECTION",
-            message="One or more subjects are invalid or belong to another school.",
-        )
+        raise ConflictException("INVALID_SUBJECT_SELECTION", "One or more subjects are invalid.")
 
-    # Persist assignments
     return await subject_repo.assign_subjects_to_teacher(
-        db,
-        assignment_in.teacher_id,
-        assignment_in.subject_ids,
-        current_user.school_id,
+        db, assignment_in.teacher_id, assignment_in.subject_ids, current_user.school_id,
     )
     
-async def list_school_subjects(
-    db: AsyncSession, 
-    current_user: User, 
-    level: AcademicLevel | None
-) -> Sequence[Subject]:
+async def list_school_subjects(db: AsyncSession, current_user: User, level: AcademicLevel | None) -> Sequence[Subject]:
     if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
         raise ForbiddenException("Unauthorized to view curriculum.")
     return await subject_repo.get_all_subjects(db, current_user.school_id, level)
 
-async def get_assigned_subjects_for_teacher(
-    db: AsyncSession, 
-    teacher_id: uuid.UUID, 
-    current_user: User
-) -> Sequence[TeacherSubject]:
+async def get_assigned_subjects_for_teacher(db: AsyncSession, teacher_id: uuid.UUID, current_user: User) -> Sequence[TeacherSubject]:
     if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
         raise ForbiddenException("Unauthorized to view assignments.")
     return await subject_repo.get_teacher_assignments(db, teacher_id, current_user.school_id)
@@ -129,17 +80,13 @@ async def update_subject_details(
     db.add(subject)
     await db.commit()
     
-    # DO NOT use db.refresh(subject). 
-    # Instead, we just return the object because we didn't change any relational data. 
-    # If the frontend needs the full teacher list again, it will refetch it via invalidateQueries.
-    return subject
+    # Fetch the object freshly from the DB so all relationships are safely loaded!
+    return await subject_repo.get_subject_by_id(db, subject.id, current_user.school_id)
 
 async def remove_subject(db: AsyncSession, subject_id: uuid.UUID, current_user: User) -> None:
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can delete subjects.")
         
-    subject = await subject_repo.get_subject_by_id(db, subject_id, current_user.school_id)
-    if not subject:
+    deleted = await subject_repo.delete_subject_direct(db, subject_id, current_user.school_id)
+    if not deleted:
         raise NotFoundException("Subject not found.")
-        
-    await subject_repo.delete_subject(db, subject)
