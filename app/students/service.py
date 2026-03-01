@@ -9,7 +9,6 @@ from app.students.schemas import (
     StudentUpdate,
     PaginatedStudentResponse
 )
-from app.students.schemas import StudentCreate
 from app.students.models import Student
 from app.students import repository as student_repo
 from app.auth.models import User
@@ -88,7 +87,6 @@ async def onboard_student(
     return saved_student
 
 
-# Add this alongside your existing onboard_student function
 async def get_paginated_students(
     db: AsyncSession,
     current_user: User,
@@ -117,6 +115,7 @@ async def get_paginated_students(
             "last_name": s.user.last_name,
             "email": s.user.email,
             "class_name": s.class_relationship.name,
+            "enrollment_status": s.enrollment_status,
             "parents": s.parents
         })
         
@@ -169,6 +168,6 @@ async def get_my_student_profile(db: AsyncSession, current_user: User):
         "last_name": student.user.last_name,
         "email": student.user.email,
         "class_name": student.class_relationship.name,
-        "guardian_name": student.guardian_name,
-        "guardian_contact": student.guardian_contact
+        "enrollment_status": student.enrollment_status,
+        "parents": student.parents
     }
