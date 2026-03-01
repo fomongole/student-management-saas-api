@@ -46,3 +46,12 @@ async def update_teacher(
 ):
     """Updates a teacher's professional details or underlying user name."""
     return await service.update_teacher_profile(db, teacher_id, teacher_in, current_user)
+
+@router.delete("/{teacher_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_teacher(
+    teacher_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Revokes access and permanently deletes a teacher from the school directory."""
+    await service.remove_teacher(db, teacher_id, current_user)

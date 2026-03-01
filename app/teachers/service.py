@@ -98,3 +98,13 @@ async def get_my_teacher_profile(db: AsyncSession, current_user: User) -> Teache
         raise NotFoundException("Teacher profile not found for this user.")
         
     return teacher
+
+async def remove_teacher(db: AsyncSession, teacher_id: uuid.UUID, current_user: User) -> None:
+    """Enforces RBAC before deleting a teacher."""
+    if current_user.role != UserRole.SCHOOL_ADMIN:
+        raise ForbiddenException("Only School Admins can remove teachers from the directory.")
+        
+    deleted = await teacher_repo.delete_teacher_direct(db, teacher_id, current_user.school_id)
+    
+    if not deleted:
+        raise NotFoundException("Teacher not found.")
