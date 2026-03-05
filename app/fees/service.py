@@ -42,7 +42,6 @@ async def setup_fee_structure(
         current_user.school_id,
     )
 
-
 async def process_student_payment(
     db: AsyncSession,
     payment_in: schemas.FeePaymentCreate,
@@ -58,41 +57,53 @@ async def process_student_payment(
     - Student must belong to the same school.
     - Dispatch receipt notification asynchronously.
     """
-
+    
     if current_user.role != UserRole.SCHOOL_ADMIN:
-        raise ForbiddenException(
-            "Only School Admins can record payments."
-        )
+        raise ForbiddenException("Only School Admins can record payments.")
 
-    # Prevents duplicate reference (anti double-entry)
-    if await repository.check_reference_exists(
-        db,
-        payment_in.reference_number,
-        current_user.school_id,
-    ):
-        raise ConflictException(
-            code="DUPLICATE_PAYMENT_REFERENCE",
-            message="Payment reference number already exists.",
-        )
+    # 1. Duplicate reference check
+    if await repository.check_reference_exists(db, payment_in.reference_number, current_user.school_id):
+        raise ConflictException(code="DUPLICATE_PAYMENT_REFERENCE", message="Payment reference number already exists.")
 
-    # Validate student ownership
-    student = await student_repo.get_student(
-        db,
-        payment_in.student_id,
-        current_user.school_id,
-    )
-
+    # 2. Validate student ownership
+    student = await student_repo.get_student(db, payment_in.student_id, current_user.school_id)
     if not student:
-        raise NotFoundException(
-            "Student not found in this school."
+        raise NotFoundException("Student not found in this school.")
+
+    # 3. Validate the Fee Structure exists
+    fee_item = await repository.get_fee_structure_by_id(db, payment_in.fee_structure_id, current_user.school_id)
+    if not fee_item:
+        raise NotFoundException("Fee structure not found.")
+
+    # 4. PREVENT OVERPAYMENT / NEGATIVE BALANCE
+    # Calculate how much the student has ALREADY paid specifically for this fee item
+    from sqlalchemy import select, func, and_
+    from app.fees.models import FeePayment
+    
+    paid_query = select(func.coalesce(func.sum(FeePayment.amount_paid), 0)).where(
+        and_(
+            FeePayment.student_id == student.id,
+            FeePayment.fee_structure_id == fee_item.id
+        )
+    )
+    already_paid = (await db.execute(paid_query)).scalar()
+    
+    remaining_balance = fee_item.amount - already_paid
+    
+    if remaining_balance <= 0:
+        raise ConflictException(
+            code="FEE_ALREADY_CLEARED",
+            message=f"This fee item ({fee_item.name}) is already fully paid."
+        )
+        
+    if payment_in.amount_paid > remaining_balance:
+        raise ConflictException(
+            code="OVERPAYMENT_DETECTED",
+            message=f"Amount exceeds remaining balance. The maximum you can pay for this item is UGX {remaining_balance:,.2f}."
         )
 
-    # Persist payment ledger entry
-    payment_record = await repository.record_payment(
-        db,
-        payment_in,
-        current_user.school_id,
-    )
+    # 5. Persist payment
+    payment_record = await repository.record_payment(db, payment_in, current_user.school_id)
 
     # Dispatch receipt notification
     message_body = (
@@ -109,9 +120,8 @@ async def process_student_payment(
         type=NotificationType.EMAIL,
         school_id=current_user.school_id,
     )
-
+    
     return payment_record
-
 
 async def get_student_balance(
     db: AsyncSession,
