@@ -1,4 +1,4 @@
-# Student Management SaaS (Enterprise Edition)
+# Student Management SaaS (Backend)
 
 A high-performance, multi-tenant School Management System built with **FastAPI**, **SQLAlchemy 2.0**, and **PostgreSQL**. This platform is designed as a scalable SaaS where multiple schools (tenants) can manage students, academics, and finances in complete isolation.
 
