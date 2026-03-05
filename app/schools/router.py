@@ -35,7 +35,6 @@ async def get_platform_dashboard(
     return await service.generate_super_admin_dashboard(db, current_user)
 
 
-
 @router.get("/", response_model=List[schemas.SchoolWithCountResponse], status_code=status.HTTP_200_OK)
 async def list_all_schools(
     db: AsyncSession = Depends(get_db),
@@ -61,6 +60,37 @@ async def update_school(
     Requires a valid JWT token from a SUPER_ADMIN.
     """
     return await service.update_school_details(db, school_id, school_in, current_user)
+
+@router.patch(
+    "/{school_id}/levels",
+    response_model=schemas.SchoolResponse,
+    status_code=status.HTTP_200_OK
+)
+async def update_school_levels(
+    school_id: uuid.UUID,
+    level_in: schemas.SchoolLevelUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Replaces the academic levels supported by a school.
+
+    This is a **full replacement** operation — the list you provide becomes the
+    new complete set of levels for that school.
+
+    Rules enforced:
+    - Only SUPER_ADMINs can call this endpoint.
+    - You cannot remove a level that still has active classes assigned to it.
+      Delete those classes first, then retry.
+
+    Example body:
+    ```json
+    { "academic_levels": ["PRIMARY", "O_LEVEL", "A_LEVEL"] }
+    ```
+
+    Requires a valid JWT token from a SUPER_ADMIN.
+    """
+    return await service.update_school_levels(db, school_id, level_in, current_user)
 
 @router.get("/settings", response_model=schemas.SchoolConfigResponse)
 async def get_settings(

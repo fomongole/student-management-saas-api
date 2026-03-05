@@ -1,13 +1,16 @@
 import uuid
+from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, delete
 
-from app.schools.models import School, SchoolConfiguration
+from app.schools.models import School, SchoolConfiguration, SchoolLevel
 from app.schools.schemas import SchoolCreate
 from app.auth.models import User
 from app.students.models import Student
+from app.core.enums import AcademicLevel
+
 
 async def get_school_by_email(db: AsyncSession, email: str) -> School | None:
     """Checks if a school with this email already exists."""
@@ -99,3 +102,51 @@ async def update_school_config_transaction(
     await db.commit()
     await db.refresh(config)
     return config
+
+async def replace_school_levels(
+    db: AsyncSession, 
+    school_id: uuid.UUID, 
+    new_levels: List[AcademicLevel]
+) -> None:
+    """
+    Atomically replaces all academic levels for a school.
+
+    Strategy: DELETE existing → INSERT new, all within one transaction.
+    This is a hard replace (PUT semantics), not a diff-patch, which keeps 
+    the logic simple, auditable, and race-condition-safe.
+
+    WARNING: The service layer must validate that no existing class data would 
+    be orphaned (e.g., classes at a level being removed) BEFORE calling this.
+    """
+    # 1. Wipe all current level entries for this school
+    await db.execute(
+        delete(SchoolLevel).where(SchoolLevel.school_id == school_id)
+    )
+
+    # 2. Insert the new level set
+    for level in new_levels:
+        db.add(SchoolLevel(school_id=school_id, level=level))
+
+    await db.commit()
+
+async def get_classes_at_removed_levels(
+    db: AsyncSession,
+    school_id: uuid.UUID,
+    levels_being_removed: List[AcademicLevel],
+) -> int:
+    """
+    Safety check: counts how many classes exist for levels about to be removed.
+    Used by the service to block the update if data would be orphaned.
+    """
+    from app.classes.models import Class
+    from sqlalchemy import func
+
+    if not levels_being_removed:
+        return 0
+
+    query = select(func.count(Class.id)).where(
+        Class.school_id == school_id,
+        Class.level.in_(levels_being_removed),
+    )
+    result = await db.execute(query)
+    return result.scalar() or 0

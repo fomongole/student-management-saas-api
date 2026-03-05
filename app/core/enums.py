@@ -12,6 +12,15 @@ class AcademicLevel(str, Enum):
     PRIMARY = "PRIMARY"
     O_LEVEL = "O_LEVEL"
     A_LEVEL = "A_LEVEL"
+
+class ALevelCategory(str, Enum):
+    """
+    Applicable ONLY to A_LEVEL classes.
+    S5 and S6 each split into Sciences or Arts streams.
+    e.g. "S5 Sciences", "S5 Arts" are distinct sections of the same base class S5.
+    """
+    SCIENCES = "SCIENCES"
+    ARTS = "ARTS"
     
 class AttendanceStatus(str, Enum):
     PRESENT = "PRESENT"

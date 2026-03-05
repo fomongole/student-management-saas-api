@@ -1,12 +1,18 @@
 import uuid
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
-from typing import Optional
+from typing import Optional, List
+from app.core.enums import AcademicLevel
 
 class SchoolCreate(BaseModel):
     name: str
     email: EmailStr
     phone: str | None = None
     address: str | None = None
+    academic_levels: List[AcademicLevel] = Field(..., min_length=1, description="Cannot be changed after creation.")
+
+class SchoolLevelResponse(BaseModel):
+    level: AcademicLevel
+    model_config = ConfigDict(from_attributes=True)
 
 class SchoolResponse(BaseModel):
     id: uuid.UUID
@@ -15,14 +21,40 @@ class SchoolResponse(BaseModel):
     phone: str | None
     address: str | None
     is_active: bool
+    academic_levels: List[SchoolLevelResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
-    
+
+class SchoolUpdate(BaseModel):
+    """
+    Schema for updating a school's profile details.
+    Notice 'academic_levels' is NOT here — use the dedicated PATCH /levels endpoint.
+    """
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SchoolLevelUpdate(BaseModel):
+    """
+    Schema for a Super Admin to replace a school's academic levels.
+    This is a full replacement (PUT semantics), not a partial patch.
+
+    Design choice: replacing all levels at once prevents orphaned partial state
+    and keeps the operation atomic. The service layer validates the new list
+    before wiping the old one.
+    """
+    academic_levels: List[AcademicLevel] = Field(
+        ..., 
+        min_length=1, 
+        description="Full replacement list of academic levels for the school."
+    )
+
 class SchoolConfigResponse(BaseModel):
     current_academic_year: int
     current_term: int
     currency_symbol: str
-    
     model_config = ConfigDict(from_attributes=True)
 
 class SchoolConfigUpdate(BaseModel):
@@ -38,20 +70,5 @@ class PlatformMetrics(BaseModel):
 class SuperAdminDashboardResponse(BaseModel):
     platform_metrics: PlatformMetrics
 
-class SchoolUpdate(BaseModel):
-    """
-    Schema for updating a school. All fields are optional.
-    If 'is_active' is passed as False, it effectively suspends the tenant.
-    """
-    name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    is_active: Optional[bool] = None
-
 class SchoolWithCountResponse(SchoolResponse):
-    """
-    Inherits from SchoolResponse but adds the dynamically calculated student count.
-    Used specifically for the Super Admin data table.
-    """
     student_count: int

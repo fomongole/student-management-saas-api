@@ -1,12 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schools import schemas, repository
-from app.schools.models import School, SchoolConfiguration
+from app.schools.models import School, SchoolConfiguration, SchoolLevel
 from app.auth.models import User
-from app.core.enums import UserRole
+from app.core.enums import UserRole, AcademicLevel
 from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,
     SchoolAlreadyExistsException,
+    ConflictException,
 )
 
 import uuid
@@ -104,6 +105,61 @@ async def update_school_details(
     await db.refresh(school)
     
     return school
+
+
+async def update_school_levels(
+    db: AsyncSession,
+    school_id: uuid.UUID,
+    level_in: schemas.SchoolLevelUpdate,
+    current_user: User,
+) -> School:
+    """
+    Replaces the academic levels of a school.
+    
+    Only SUPER_ADMINs can call this — school-level changes are a platform-wide 
+    decision (e.g., a nursery expanding to include primary education).
+
+    Safety rules:
+    - Cannot remove a level that still has classes assigned to it.
+      The admin must delete those classes first to prevent orphaned curriculum data.
+    - Duplicate levels in the input list are silently de-duplicated.
+    """
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise ForbiddenException("Only Super Admins can modify a school's academic levels.")
+
+    school = await repository.get_school_by_id(db, school_id)
+    if not school:
+        raise NotFoundException("School not found.")
+
+    # De-duplicate the incoming list while preserving order
+    new_levels: List[AcademicLevel] = list(dict.fromkeys(level_in.academic_levels))
+
+    # Determine which levels are being REMOVED by comparing against current levels
+    current_level_values = {sl.level for sl in school.academic_levels}
+    new_level_values     = set(new_levels)
+    levels_being_removed = list(current_level_values - new_level_values)
+
+    # --- Safety check: block removal if classes exist at those levels ---
+    if levels_being_removed:
+        orphaned_class_count = await repository.get_classes_at_removed_levels(
+            db, school_id, levels_being_removed
+        )
+        if orphaned_class_count > 0:
+            raise ConflictException(
+                code="CLASSES_EXIST_AT_REMOVED_LEVEL",
+                message=(
+                    f"Cannot remove level(s) {[l.value for l in levels_being_removed]} "
+                    f"because {orphaned_class_count} class(es) are still assigned to them. "
+                    "Please delete those classes first."
+                ),
+            )
+
+    # --- Atomic replace ---
+    await repository.replace_school_levels(db, school_id, new_levels)
+
+    # Re-fetch so the response reflects the new state
+    return await repository.get_school_by_id(db, school_id)
+
 
 async def get_active_settings(db: AsyncSession, current_user: User) -> SchoolConfiguration:
     """Any authenticated user in the school can view settings (needed for dashboards)."""
