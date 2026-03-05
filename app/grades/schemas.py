@@ -1,12 +1,15 @@
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
+
 
 class GradingScaleCreate(BaseModel):
     grade_symbol: str
-    min_score: float = Field(..., ge=0)
-    max_score: float = Field(..., le=100)
+    min_score: float
+    max_score: float
     label: str
     points: int
+
 
 class GradingScaleResponse(BaseModel):
     id: uuid.UUID
@@ -15,24 +18,47 @@ class GradingScaleResponse(BaseModel):
     max_score: float
     label: str
     points: int
-    school_id: uuid.UUID
-    
+
     model_config = ConfigDict(from_attributes=True)
-    
+
+
 class SubjectResultDetail(BaseModel):
+    """A single subject's result within one exam session."""
     subject_name: str
     subject_code: str
     score: float
-    grade: str
-    label: str
+    grade: str       # e.g. "D1", "B3"
+    label: str       # e.g. "Distinction", "Credit"
     points: int
-    comment: str | None
+    comment: Optional[str] = None
+
+
+class ExamSessionReport(BaseModel):
+    """
+    All results for one named exam session within a term.
+
+    Example: "Beginning of Term Test" or "End of Term Exam".
+    A term can have any number of these — the school decides.
+    """
+    session_name: str
+    results: List[SubjectResultDetail]
+    session_average: float
+    session_total_points: int
+
 
 class StudentReportCard(BaseModel):
+    """
+    Full academic report for a student for a given term.
+
+    Redesign: instead of a flat list of results, results are now
+    organised into exam sessions so the student (and PDF) clearly
+    sees "Beginning of Term — Maths: 85%" vs "End of Term — Maths: 91%"
+    without conflating them.
+    """
     student_name: str
     class_name: str
     term: int
     year: int
-    results: list[SubjectResultDetail]
-    total_points: int
-    average_score: float
+    sessions: List[ExamSessionReport]
+    overall_average: float
+    overall_total_points: int
