@@ -11,7 +11,7 @@ from app.core.exceptions import (
 )
 
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Sequence
 
 
 async def create_new_school(
@@ -52,20 +52,12 @@ async def generate_super_admin_dashboard(
 async def get_all_schools(db: AsyncSession, current_user: User) -> List[Dict[str, Any]]:
     """
     Retrieves all non-deleted schools with their current student counts.
-
-    Root-cause fix: the original code built response dicts that omitted
-    academic_levels entirely. The frontend was always receiving [] for every
-    school, so SchoolLevelsModal had nothing to pre-tick and the levels column
-    would always be empty.
     """
     if current_user.role != UserRole.SUPER_ADMIN:
         raise ForbiddenException("Only Super Admins can view the full school directory.")
 
     rows = await repository.get_all_schools_with_counts(db)
 
-    # Unpack the SQLAlchemy Row tuples (School, student_count) into a format
-    # Pydantic can serialise. academic_levels is now included because the
-    # repository eagerly loads it with selectinload().
     result = []
     for school, student_count in rows:
         result.append({
@@ -82,6 +74,37 @@ async def get_all_schools(db: AsyncSession, current_user: User) -> List[Dict[str
     return result
 
 
+async def get_my_school_levels(
+    db: AsyncSession,
+    current_user: User,
+) -> List[SchoolLevel]:
+    """
+    Returns the academic levels for the current user's school.
+
+    Design: any school-scoped role (SCHOOL_ADMIN, TEACHER, STUDENT, PARENT)
+    can call this — it's read-only and scoped to their own tenant.
+    SUPER_ADMINs have no school_id and are explicitly blocked.
+
+    The result is used by frontend dropdowns to show only levels the school
+    actually operates (e.g. a primary-only school won't see A_LEVEL in the
+    subject creation form).
+    """
+    if current_user.role == UserRole.SUPER_ADMIN:
+        raise ForbiddenException(
+            "Super Admins are not scoped to a school. "
+            "Use GET /schools/{id} to inspect a specific school's levels."
+        )
+
+    if not current_user.school_id:
+        raise NotFoundException("No school associated with this account.")
+
+    school = await repository.get_school_by_id(db, current_user.school_id)
+    if not school:
+        raise NotFoundException("School not found.")
+
+    return school.academic_levels
+
+
 async def update_school_details(
     db: AsyncSession,
     school_id: uuid.UUID,
@@ -91,8 +114,6 @@ async def update_school_details(
     """
     Updates school details or toggles suspension status.
     """
-    # Note: Later, you might allow SCHOOL_ADMIN to update their *own* school's address/phone.
-    # For now, keeping it strict to SUPER_ADMIN for SaaS-level management.
     if current_user.role != UserRole.SUPER_ADMIN:
         raise ForbiddenException("Only Super Admins can modify school profiles.")
 
@@ -100,7 +121,6 @@ async def update_school_details(
     if not school:
         raise NotFoundException("School not found.")
 
-    # exclude_unset=True ensures we only update fields the client explicitly sent
     update_data = school_in.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():

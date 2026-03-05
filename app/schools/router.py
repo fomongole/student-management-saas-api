@@ -34,7 +34,6 @@ async def get_platform_dashboard(
     """
     return await service.generate_super_admin_dashboard(db, current_user)
 
-
 @router.get("/", response_model=List[schemas.SchoolWithCountResponse], status_code=status.HTTP_200_OK)
 async def list_all_schools(
     db: AsyncSession = Depends(get_db),
@@ -46,6 +45,27 @@ async def list_all_schools(
     Requires a valid JWT token from a SUPER_ADMIN.
     """
     return await service.get_all_schools(db, current_user)
+
+@router.get(
+    "/me/levels",
+    response_model=List[schemas.SchoolLevelResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def get_my_school_levels(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns the academic levels configured for the currently authenticated user's school.
+
+    Used by School Admins and Teachers to scope UI dropdowns (e.g. subject level
+    selector) to only the levels their school actually operates — instead of
+    showing all four possible levels regardless of what the school offers.
+
+    Requires any authenticated school-scoped user (SCHOOL_ADMIN, TEACHER, etc.).
+    SUPER_ADMINs are not school-scoped and cannot call this endpoint.
+    """
+    return await service.get_my_school_levels(db, current_user)
 
 @router.patch("/{school_id}", response_model=schemas.SchoolResponse, status_code=status.HTTP_200_OK)
 async def update_school(
@@ -82,11 +102,6 @@ async def update_school_levels(
     - Only SUPER_ADMINs can call this endpoint.
     - You cannot remove a level that still has active classes assigned to it.
       Delete those classes first, then retry.
-
-    Example body:
-    ```json
-    { "academic_levels": ["PRIMARY", "O_LEVEL", "A_LEVEL"] }
-    ```
 
     Requires a valid JWT token from a SUPER_ADMIN.
     """
