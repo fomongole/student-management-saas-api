@@ -2,6 +2,9 @@
 
 A high-performance, multi-tenant School Management System built with **FastAPI**, **SQLAlchemy 2.0**, and **PostgreSQL**. This platform is designed as a scalable SaaS where multiple schools (tenants) can manage students, academics, and finances in complete isolation.
 
+🔗 **Frontend Repository:** [**student-management-saas-web**](https://github.com/fomongole/student-management-saas-web)  
+![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)
+
 ---
 
 ## 🚀 Key Features
