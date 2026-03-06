@@ -10,7 +10,7 @@ from app.auth.models import User
 
 async def validate_students_exist(db: AsyncSession, student_ids: list[uuid.UUID], school_id: uuid.UUID) -> bool:
     """
-    PERFORMANCE FIX: Validates that all provided student IDs exist 
+    Validates that all provided student IDs exist 
     and belong to the school in a single database query.
     """
     query = select(func.count(Student.id)).where(

@@ -58,7 +58,6 @@ class Result(TenantModel):
     # Raw numeric score (0.0 to 100.0)
     score: Mapped[float] = mapped_column(Float, nullable=False)
     
-    # Qualitative feedback
     teacher_comment: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (

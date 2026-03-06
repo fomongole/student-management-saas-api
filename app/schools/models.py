@@ -38,10 +38,9 @@ class School(BaseModel):
     address: Mapped[str] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
-    # Soft Delete column
+    # Soft Delete
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    # --- Relationships ---
     academic_levels: Mapped[List["SchoolLevel"]] = relationship(
         "SchoolLevel", cascade="all, delete-orphan"
     )

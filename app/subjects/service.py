@@ -23,7 +23,7 @@ async def create_new_subject(
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Unauthorized.")
 
-    # SECURITY LOCK: Verify school is licensed for this level
+    # Verify school is licensed for this level
     school = await school_repo.get_school_by_id(db, current_user.school_id)
     registered_levels = [sl.level for sl in school.academic_levels]
     if subject_in.level not in registered_levels:

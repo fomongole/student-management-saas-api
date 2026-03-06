@@ -158,7 +158,6 @@ async def get_my_student_profile(db: AsyncSession, current_user: User):
     if not student:
         raise NotFoundException("Student profile not found for this user.")
         
-    # Format to match the StudentListResponse schema so the frontend gets the names
     return {
         "id": student.id,
         "user_id": student.user_id,

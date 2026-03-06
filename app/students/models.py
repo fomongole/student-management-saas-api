@@ -33,7 +33,6 @@ class Student(TenantModel):
         UniqueConstraint('school_id', 'admission_number', name='_school_admission_uc'),
     )
 
-    # --- Relationships ---
     school: Mapped["School"] = relationship("School", back_populates="students")
     user: Mapped["User"] = relationship("User")
     class_relationship: Mapped["Class"] = relationship("Class")

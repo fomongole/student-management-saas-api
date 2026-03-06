@@ -48,7 +48,6 @@ async def generate_report_card(
     if not student:
         raise NotFoundException("Student not found or unauthorized access.")
 
-    # --- RBAC ---
     if current_user.role == UserRole.STUDENT:
         if student.user_id != current_user.id:
             raise ForbiddenException("You can only view your own report card.")
@@ -60,14 +59,14 @@ async def generate_report_card(
         if not is_linked:
             raise ForbiddenException("You are not linked to this student.")
 
-    # Filter to this term's results only
+    # Filters to this term's results only
     relevant_results = [
         r for r in student.results
         if r.exam.year == year and r.exam.term == term
     ]
 
     if not relevant_results:
-        # Return an empty but valid report card so the frontend can render
+        # Returns an empty but valid report card so the frontend can render
         # "No results yet" without a 404 crashing the page.
         return schemas.StudentReportCard(
             student_name=f"{student.user.first_name} {student.user.last_name}",
@@ -79,7 +78,7 @@ async def generate_report_card(
             overall_total_points=0,
         )
 
-    # Fetch all grading tiers ONCE into memory (avoids N+1 queries)
+    # Fetching all grading tiers ONCE into memory (avoids N+1 queries)
     all_tiers = await repository.get_all_grading_tiers(db, current_user.school_id)
 
     def resolve_grade(score: float):

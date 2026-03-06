@@ -18,7 +18,7 @@ async def get_tier_by_symbol(db: AsyncSession, symbol: str, school_id: uuid.UUID
 
 async def get_all_grading_tiers(db: AsyncSession, school_id: uuid.UUID) -> list[GradingScale]:
     """
-    PERFORMANCE FIX: Fetches all grading tiers for a school into memory 
+    Fetches all grading tiers for a school into memory 
     to prevent N+1 DB queries during report card generation.
     """
     query = select(GradingScale).where(GradingScale.school_id == school_id)
@@ -27,7 +27,6 @@ async def get_all_grading_tiers(db: AsyncSession, school_id: uuid.UUID) -> list[
 
 async def sync_grading_tier(db: AsyncSession, tier_in: schemas.GradingScaleCreate, school_id: uuid.UUID) -> GradingScale:
     """
-    Enterprise Upsert Logic:
     1. Checks if the symbol (e.g., 'D2') already exists for this school.
     2. Updates existing values if found, otherwise creates a new record.
     """
@@ -55,7 +54,7 @@ async def get_student_report_data(
     school_id: uuid.UUID
 ) -> Student | None:
     """
-    Production Fetcher: Pulls the student profile with all nested results,
+    Pulls the student profile with all nested results,
     subject details, and class information in a single optimized query.
     """
     query = (

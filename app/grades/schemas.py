@@ -50,8 +50,7 @@ class StudentReportCard(BaseModel):
     """
     Full academic report for a student for a given term.
 
-    Redesign: instead of a flat list of results, results are now
-    organised into exam sessions so the student (and PDF) clearly
+    Results are organised into exam sessions so the student (and PDF) clearly
     sees "Beginning of Term — Maths: 85%" vs "End of Term — Maths: 91%"
     without conflating them.
     """

@@ -32,7 +32,7 @@ async def send_notification_task(
         logger.error(f"Failed to send {type.value} to {recipient_id}: {str(e)}")
         final_status = NotificationStatus.FAILED
 
-    # Open a brief, independent session just to update the status
+    # Opening a brief, independent session just to update the status
     async with AsyncSessionLocal() as db:
         await repository.update_notification_status(db, notification_id, final_status)
 
@@ -50,13 +50,12 @@ async def dispatch_alert(
     Public service entry point for triggering alerts.
     """
     
-    # 1. Save the record as PENDING using the main request's DB session.
+    # Save the record as PENDING using the main request's DB session.
     # If the HTTP request fails and rolls back, this notification magically disappears.
     notification = await repository.create_notification_record(
         db, recipient_id, title, message, type, school_id
     )
 
-    # 2. Hand off the slow network request to the background worker
     background_tasks.add_task(
         send_notification_task,
         notification.id,

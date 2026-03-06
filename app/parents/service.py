@@ -28,7 +28,7 @@ async def onboard_parent(
     if await auth_repo.get_user_by_email(db, data.email):
         raise UserEmailAlreadyExistsException()
 
-    # PERFORMANCE: Validate all students belong to this school in ONE query
+    # Validates all students belong to this school in ONE query
     is_valid = await repository.validate_students_exist(
         db, data.student_ids, current_user.school_id
     )
@@ -88,7 +88,7 @@ async def link_existing_parent(
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Unauthorized.")
 
-    # Validate the new students belong to the school
+    # Validates the new students belong to the school
     is_valid = await repository.validate_students_exist(db, data.student_ids, current_user.school_id)
     if not is_valid:
         raise ConflictException("INVALID_STUDENTS", "One or more students do not exist in your school.")
@@ -123,7 +123,7 @@ async def update_parent_profile(db: AsyncSession, parent_id: uuid.UUID, data: sc
     if not updated:
         raise NotFoundException("Parent not found.")
     
-    # We refetch the whole list object so the UI gets the children array back immediately
+    # Refetching the whole list object so the UI gets the children array back immediately
     all_parents = await repository.get_all_parents_with_children(db, current_user.school_id)
     return next((p for p in all_parents if p["id"] == parent_id), None)
 

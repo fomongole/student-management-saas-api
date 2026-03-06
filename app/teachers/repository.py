@@ -25,7 +25,7 @@ async def create_teacher_transaction(db: AsyncSession, new_user: User, new_teach
     
     await db.commit()
     
-    # Do NOT use db.refresh(). Instead, re-fetch the complete object 
+    # NOT using db.refresh(). Instead, re-fetching the complete object 
     # to guarantee all relationships (User, assigned_subjects) are loaded for Pydantic.
     return await get_teacher_with_user(db, new_teacher.id, new_teacher.school_id)
 

@@ -1,11 +1,14 @@
 import uuid
+
 from fastapi import BackgroundTasks
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.fees import repository, schemas
 from app.auth.models import User
 from app.core.enums import UserRole
 from app.fees.models import FeeStructure
+
 from app.students import repository as student_repo
 from app.parents import repository as parent_repo
 from app.notifications.service import dispatch_alert
@@ -42,6 +45,7 @@ async def setup_fee_structure(
         current_user.school_id,
     )
 
+
 async def process_student_payment(
     db: AsyncSession,
     payment_in: schemas.FeePaymentCreate,
@@ -57,52 +61,44 @@ async def process_student_payment(
     - Student must belong to the same school.
     - Dispatch receipt notification asynchronously.
     """
-    
+
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can record payments.")
 
-    # 1. Duplicate reference check
     if await repository.check_reference_exists(db, payment_in.reference_number, current_user.school_id):
         raise ConflictException(code="DUPLICATE_PAYMENT_REFERENCE", message="Payment reference number already exists.")
 
-    # 2. Validate student ownership
     student = await student_repo.get_student(db, payment_in.student_id, current_user.school_id)
     if not student:
         raise NotFoundException("Student not found in this school.")
 
-    # 3. Validate the Fee Structure exists
     fee_item = await repository.get_fee_structure_by_id(db, payment_in.fee_structure_id, current_user.school_id)
     if not fee_item:
         raise NotFoundException("Fee structure not found.")
 
-    # 4. PREVENT OVERPAYMENT / NEGATIVE BALANCE
-    # Calculate how much the student has ALREADY paid specifically for this fee item
-    from sqlalchemy import select, func, and_
-    from app.fees.models import FeePayment
-    
-    paid_query = select(func.coalesce(func.sum(FeePayment.amount_paid), 0)).where(
-        and_(
-            FeePayment.student_id == student.id,
-            FeePayment.fee_structure_id == fee_item.id
-        )
+    # PREVENT OVERPAYMENT / NEGATIVE BALANCE
+    # Delegate to repository to calculate how much the student has ALREADY paid for this fee item
+    already_paid = await repository.get_amount_paid_for_fee_item(
+        db,
+        student_id=student.id,
+        fee_structure_id=fee_item.id,
     )
-    already_paid = (await db.execute(paid_query)).scalar()
-    
+
     remaining_balance = fee_item.amount - already_paid
-    
+
     if remaining_balance <= 0:
         raise ConflictException(
             code="FEE_ALREADY_CLEARED",
             message=f"This fee item ({fee_item.name}) is already fully paid."
         )
-        
+
     if payment_in.amount_paid > remaining_balance:
         raise ConflictException(
             code="OVERPAYMENT_DETECTED",
             message=f"Amount exceeds remaining balance. The maximum you can pay for this item is UGX {remaining_balance:,.2f}."
         )
 
-    # 5. Persist payment
+    # Persist payment
     payment_record = await repository.record_payment(db, payment_in, current_user.school_id)
 
     # Dispatch receipt notification
@@ -120,8 +116,9 @@ async def process_student_payment(
         type=NotificationType.EMAIL,
         school_id=current_user.school_id,
     )
-    
+
     return payment_record
+
 
 async def get_student_balance(
     db: AsyncSession,
@@ -185,6 +182,7 @@ async def get_student_balance(
         - financials["total_paid"],
     )
 
+
 async def list_fee_structures(
     db: AsyncSession,
     year: int | None,
@@ -193,8 +191,9 @@ async def list_fee_structures(
 ) -> Sequence[FeeStructure]:
     if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
         raise ForbiddenException("Unauthorized to view fee structures.")
-    
+
     return await repository.get_all_fee_structures(db, current_user.school_id, year, term)
+
 
 async def get_student_payment_history(
     db: AsyncSession,
@@ -202,7 +201,7 @@ async def get_student_payment_history(
     current_user: User
 ) -> list[schemas.FeePaymentDetailResponse]:
     """Retrieves detailed payment history with strict privacy checks."""
-    
+
     # 1. Verify student exists in this school
     student = await student_repo.get_student(db, student_id, current_user.school_id)
     if not student:
@@ -220,7 +219,7 @@ async def get_student_payment_history(
 
     # 3. Fetch records
     payments = await repository.get_student_payments(db, student_id, current_user.school_id)
-    
+
     # 4. Format for frontend
     return [
         schemas.FeePaymentDetailResponse(
@@ -235,6 +234,7 @@ async def get_student_payment_history(
         ) for p in payments
     ]
 
+
 async def update_fee_structure(
     db: AsyncSession,
     structure_id: uuid.UUID,
@@ -247,12 +247,12 @@ async def update_fee_structure(
     """
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can update fee structures.")
-        
+
     structure = await repository.get_fee_structure_by_id(db, structure_id, current_user.school_id)
     if not structure:
         raise NotFoundException("Fee structure not found.")
-        
+
     update_data = structure_in.model_dump(exclude_unset=True)
-    
+
     # Strictly delegate the DB transaction to the repository
     return await repository.update_fee_structure_transaction(db, structure, update_data)

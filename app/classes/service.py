@@ -15,11 +15,9 @@ from app.core.exceptions import (
     ConflictException,
 )
 
-# ---------------------------------------------------------------------------
-# Per-level caps: counts DISTINCT base class names (not total rows).
+# Counts DISTINCT base class names (not total rows).
 # Streams (P1 EAST, P1 WEST) and A-Level categories (S5 Sciences, S5 Arts)
 # are variants of the same base class and do NOT count against this limit.
-# ---------------------------------------------------------------------------
 LEVEL_CLASS_LIMITS: dict[AcademicLevel, int] = {
     AcademicLevel.NURSERY:  3,   # e.g. Baby Class, Middle Class, Top Class
     AcademicLevel.PRIMARY:  7,   # P1 – P7
@@ -32,7 +30,7 @@ async def create_new_class(db: AsyncSession, class_in: ClassCreate, current_user
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can manage classes.")
 
-    # --- 1. Duplicate check (name + stream + category must be unique per school) ---
+    # Duplicate check (name + stream + category must be unique per school)
     existing_class = await repository.get_class_by_details(
         db=db,
         school_id=current_user.school_id,
@@ -43,7 +41,7 @@ async def create_new_class(db: AsyncSession, class_in: ClassCreate, current_user
     if existing_class:
         raise ClassAlreadyExistsException()
 
-    # --- 2. Per-level cap enforcement ---
+    # Per-level cap enforcement
     # Count distinct base class names already at this level.
     # A new name only counts if it's genuinely NEW (not just a new stream/category
     # variant of an already-registered base name).
@@ -58,11 +56,11 @@ async def create_new_class(db: AsyncSession, class_in: ClassCreate, current_user
         school_id=current_user.school_id,
         name=class_in.name,
         stream=None,       # Check for ANY variant with this name regardless of stream
-        category=None,     # We'll handle this below with a raw name existence check
+        category=None,     # This is handled below with a raw name existence check
     )
 
-    # More precise: check if ANY class with this base name already exists at this level.
-    # If yes → it's just a new stream/category variant, not a new base class → no cap hit.
+    # Check if ANY class with this base name already exists at this level.
+    # If yes, it's just a new stream/category variant, not a new base class → no cap hit.
     name_already_registered = await _base_class_name_exists(
         db, current_user.school_id, class_in.name, class_in.level
     )
@@ -107,7 +105,6 @@ async def _base_class_name_exists(
 
 
 async def get_school_classes(db: AsyncSession, current_user: User) -> Sequence[Class]:
-    # Allow teachers to read the class list too if needed
     if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER]:
         raise ForbiddenException("Unauthorized.")
 
@@ -136,7 +133,7 @@ async def update_class_details(
 
     update_data = class_in.model_dump(exclude_unset=True)
 
-    # Resolve the final state after this patch to validate category consistency.
+    # Resolve the final state after the patch to validate category consistency.
     new_level    = update_data.get("level",    target_class.level)
     new_category = update_data.get("category", target_class.category)
 
@@ -151,7 +148,7 @@ async def update_class_details(
             message=f"Category is only applicable to A-Level classes, not {new_level}."
         )
 
-    # --- Duplicate check against resolved final state ---
+    # Duplicate check against resolved final state
     new_name   = update_data.get("name",   target_class.name)
     new_stream = update_data.get("stream", target_class.stream)
 
@@ -171,7 +168,7 @@ async def update_class_details(
     db.add(target_class)
     await db.commit()
     
-    # We MUST re-fetch the object so we don't return stale relationships
+    # Re-fetching the object so i don't return stale relationships
     return await repository.get_class_by_id(db, target_class.id, current_user.school_id)
 
 
@@ -179,7 +176,6 @@ async def remove_class(db: AsyncSession, class_id: uuid.UUID, current_user: User
     if current_user.role != UserRole.SCHOOL_ADMIN:
         raise ForbiddenException("Only School Admins can delete classes.")
 
-    # Call the highly optimized direct SQL execution
     deleted = await repository.delete_class_direct(
         db=db,
         class_id=class_id,

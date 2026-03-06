@@ -16,10 +16,10 @@ async def get_population_metrics(db: AsyncSession, school_id: uuid.UUID) -> dict
     """
     Optimized aggregation using relationships.
     """
-    # 1. Count Students linked to this school
+    # Count Students linked to this school
     student_count_query = select(func.count(Student.id)).where(Student.school_id == school_id)
     
-    # 2. Grouped User counts (Teachers/Parents) linked to this school
+    # Grouped User counts (Teachers/Parents) linked to this school
     user_counts_query = (
         select(User.role, func.count(User.id).label("count")) 
         .where(User.school_id == school_id)
@@ -44,7 +44,7 @@ async def get_financial_metrics(db: AsyncSession, year: int, term: int, school_i
     with current student population counts.
     """
     
-    # --- STEP 1: CALCULATE TOTAL EXPECTED REVENUE (TOTAL BILLED) ---
+    # --- CALCULATE TOTAL EXPECTED REVENUE (TOTAL BILLED) ---
     
     # A. Get all fee structures for this term
     fs_query = select(FeeStructure).where(
@@ -80,7 +80,7 @@ async def get_financial_metrics(db: AsyncSession, year: int, term: int, school_i
             total_billed += (fs.amount * applicable_students)
 
 
-    # --- STEP 2: CALCULATE TOTAL COLLECTED ---
+    # --- CALCULATE TOTAL COLLECTED ---
     
     paid_query = (
         select(func.coalesce(func.sum(FeePayment.amount_paid), 0))

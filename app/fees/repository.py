@@ -1,4 +1,5 @@
 import uuid
+
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.fees.models import FeeStructure, FeePayment
@@ -6,6 +7,7 @@ from app.fees import schemas
 from app.students.models import Student
 from sqlalchemy.orm import joinedload
 from typing import Sequence
+
 
 async def create_fee_structure(db: AsyncSession, structure_in: schemas.FeeStructureCreate, school_id: uuid.UUID) -> FeeStructure:
     """Inserts a new billable fee structure."""
@@ -15,6 +17,7 @@ async def create_fee_structure(db: AsyncSession, structure_in: schemas.FeeStruct
     await db.refresh(db_obj)
     return db_obj
 
+
 async def record_payment(db: AsyncSession, payment_in: schemas.FeePaymentCreate, school_id: uuid.UUID) -> FeePayment:
     """Inserts an immutable payment record into the ledger."""
     db_obj = FeePayment(**payment_in.model_dump(), school_id=school_id)
@@ -22,6 +25,7 @@ async def record_payment(db: AsyncSession, payment_in: schemas.FeePaymentCreate,
     await db.commit()
     await db.refresh(db_obj)
     return db_obj
+
 
 async def check_reference_exists(db: AsyncSession, reference_number: str, school_id: uuid.UUID) -> bool:
     """Prevents double-entry of the same bank receipt."""
@@ -31,9 +35,29 @@ async def check_reference_exists(db: AsyncSession, reference_number: str, school
     result = await db.execute(query)
     return result.scalar_one_or_none() is not None
 
+
+async def get_amount_paid_for_fee_item(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    fee_structure_id: uuid.UUID,
+) -> float:
+    """
+    Calculates the total amount a student has already paid towards a specific fee item 
+    to enforce overpayment and balance-cleared guards.
+    """
+    query = select(func.coalesce(func.sum(FeePayment.amount_paid), 0)).where(
+        and_(
+            FeePayment.student_id == student_id,
+            FeePayment.fee_structure_id == fee_structure_id,
+        )
+    )
+    result = await db.execute(query)
+    return float(result.scalar())
+
+
 async def get_student_financial_summary(db: AsyncSession, student_id: uuid.UUID, year: int, term: int, school_id: uuid.UUID) -> dict:
     """Aggregates total billed vs total paid for a specific term."""
-    
+
     # 1. Fetching the student's class to ensure we don't bill them for other classes
     student_query = select(Student.class_id).where(Student.id == student_id)
     student_class_id = (await db.execute(student_query)).scalar()
@@ -41,8 +65,8 @@ async def get_student_financial_summary(db: AsyncSession, student_id: uuid.UUID,
     # 2. Calculates Total Billed (Global fees + Class-specific fees)
     billed_query = select(func.coalesce(func.sum(FeeStructure.amount), 0)).where(
         and_(
-            FeeStructure.year == year, 
-            FeeStructure.term == term, 
+            FeeStructure.year == year,
+            FeeStructure.term == term,
             FeeStructure.school_id == school_id,
             or_(FeeStructure.class_id == student_class_id, FeeStructure.class_id.is_(None))
         )
@@ -72,29 +96,30 @@ async def get_student_financial_summary(db: AsyncSession, student_id: uuid.UUID,
         "total_paid": float(total_paid),
         "outstanding_balance": float(total_billed - total_paid)
     }
-    
+
 
 async def get_all_fee_structures(
-    db: AsyncSession, 
-    school_id: uuid.UUID, 
-    year: int | None = None, 
+    db: AsyncSession,
+    school_id: uuid.UUID,
+    year: int | None = None,
     term: int | None = None
 ) -> Sequence[FeeStructure]:
     """Fetches the billable items, optionally filtered by academic term."""
     query = select(FeeStructure).where(FeeStructure.school_id == school_id)
-    
+
     if year:
         query = query.where(FeeStructure.year == year)
     if term:
         query = query.where(FeeStructure.term == term)
-        
+
     query = query.order_by(FeeStructure.year.desc(), FeeStructure.term.desc(), FeeStructure.name)
     result = await db.execute(query)
     return result.scalars().all()
 
+
 async def get_student_payments(
-    db: AsyncSession, 
-    student_id: uuid.UUID, 
+    db: AsyncSession,
+    student_id: uuid.UUID,
     school_id: uuid.UUID
 ) -> Sequence[FeePayment]:
     """Fetches a student's payment history, eager-loading the fee structure details."""
@@ -109,6 +134,7 @@ async def get_student_payments(
     result = await db.execute(query)
     return result.scalars().all()
 
+
 async def get_fee_structure_by_id(db: AsyncSession, structure_id: uuid.UUID, school_id: uuid.UUID) -> FeeStructure | None:
     """Fetches a specific fee structure."""
     query = select(FeeStructure).where(
@@ -117,13 +143,14 @@ async def get_fee_structure_by_id(db: AsyncSession, structure_id: uuid.UUID, sch
     result = await db.execute(query)
     return result.scalar_one_or_none()
 
+
 async def update_fee_structure_transaction(db: AsyncSession, structure: FeeStructure, update_data: dict) -> FeeStructure:
     """Handles the actual database transaction for updating the structure."""
     for key, value in update_data.items():
         setattr(structure, key, value)
-        
+
     db.add(structure)
     await db.commit()
     await db.refresh(structure)
-    
+
     return structure

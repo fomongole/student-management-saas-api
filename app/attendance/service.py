@@ -95,11 +95,8 @@ async def get_student_attendance_history(
     end_date: date | None
 ) -> List[schemas.StudentAttendanceDetail]:
     
-    # Optional: Add RBAC here. For example, a PARENT should only see their own child's history.
     if current_user.role not in [UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.STUDENT, UserRole.PARENT]:
          raise ForbiddenException("Unauthorized.")
-         
-    # If the user is a STUDENT, ensure they are only requesting their own ID (logic omitted for brevity, but crucial for production)
 
     history = await repository.get_student_history(
         db, student_id, current_user.school_id, start_date, end_date

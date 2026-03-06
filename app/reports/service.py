@@ -56,7 +56,7 @@ async def generate_defaulters_csv(db: AsyncSession, year: int, term: int, curren
         
     defaulters = await repository.get_fee_defaulters(db, year, term, current_user.school_id)
     
-    # Create an in-memory string buffer for the CSV
+    # Creating an in-memory string buffer for the CSV
     stream = io.StringIO()
     writer = csv.DictWriter(stream, fieldnames=["admission_number", "first_name", "last_name", "total_billed", "total_paid", "balance"])
     

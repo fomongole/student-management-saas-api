@@ -151,7 +151,7 @@ async def replace_school_levels(
     This is a hard replace (PUT semantics), not a diff-patch, which keeps
     the logic simple, auditable, and race-condition-safe.
 
-    WARNING: The service layer must validate that no existing class data would
+    The service layer validates that no existing class data would
     be orphaned (e.g., classes at a level being removed) BEFORE calling this.
     """
     # 1. Wipe all current level entries for this school

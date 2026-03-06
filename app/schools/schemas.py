@@ -28,7 +28,7 @@ class SchoolResponse(BaseModel):
 class SchoolUpdate(BaseModel):
     """
     Schema for updating a school's profile details.
-    Notice 'academic_levels' is NOT here — use the dedicated PATCH /levels endpoint.
+    'academic_levels' is NOT here — using the dedicated PATCH /levels endpoint.
     """
     name: Optional[str] = None
     email: Optional[EmailStr] = None

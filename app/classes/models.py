@@ -38,13 +38,13 @@ class Class(TenantModel):
     form_teacher: Mapped["Teacher"] = relationship("Teacher")
 
     __table_args__ = (
-        # Uniqueness: a school cannot have two identical class+stream+category combos.
+        # A school cannot have two identical class+stream+category combos.
         # For non-A_Level, category is NULL and NULLs are treated as distinct by Postgres,
         # so we use a partial unique index via the UniqueConstraint here which covers the
         # general case. The service layer enforces A_Level category requirements.
         UniqueConstraint('school_id', 'name', 'stream', 'category', name='_school_class_stream_category_uc'),
 
-        # Database-level guard: category MUST be set for A_Level, MUST be NULL otherwise.
+        # Database-level guard: Category MUST be set for A_Level, MUST be NULL otherwise.
         CheckConstraint(
             "(level = 'A_LEVEL' AND category IS NOT NULL) OR (level != 'A_LEVEL' AND category IS NULL)",
             name='_category_required_for_a_level'

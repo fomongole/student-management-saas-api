@@ -16,10 +16,8 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     
-    # This tells Pydantic it's okay to read data from a SQLAlchemy ORM model
     model_config = ConfigDict(from_attributes=True)
     
-# Token Response
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -27,6 +25,5 @@ class Token(BaseModel):
 class TokenPayload(BaseModel):
     sub: str | None = None
     
-# Inherits everything from UserCreate (email, password, etc.) but adds school_id
 class SchoolAdminCreate(UserCreate):
     school_id: uuid.UUID

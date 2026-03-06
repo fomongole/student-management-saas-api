@@ -12,7 +12,6 @@ from app.core.enums import AttendanceStatus
 from sqlalchemy.orm import joinedload
 from app.auth.models import User
 
-# --- READ OPERATIONS ---
 
 async def validate_students_in_class(
     db: AsyncSession, 
@@ -20,7 +19,6 @@ async def validate_students_in_class(
     class_id: uuid.UUID, 
     school_id: uuid.UUID
 ) -> bool:
-    # Using func.count() instead of pulling all rows into memory
     query = select(func.count(Student.id)).where(
         and_(
             Student.id.in_(student_ids),
@@ -36,8 +34,6 @@ async def get_student_user_mapping(db: AsyncSession, student_ids: list[uuid.UUID
     query = select(Student.id, Student.user_id).where(Student.id.in_(student_ids))
     result = await db.execute(query)
     return {row.id: row.user_id for row in result.all() if row.user_id}
-
-# --- WRITE OPERATIONS (UPSERT) ---
 
 async def sync_attendance_records(
     db: AsyncSession, 
@@ -95,8 +91,6 @@ async def sync_attendance_records(
             if rec.status in (AttendanceStatus.ABSENT, AttendanceStatus.LATE):
                 alerts_to_trigger.append(rec)
     
-    # Using flush() generates the UUIDs for new records instantly in memory.
-    # This prevents the N+1 query problem of running await db.refresh() in a loop.
     await db.flush() 
     await db.commit()
         
@@ -133,7 +127,6 @@ async def get_class_attendance_for_date(
     The 'Roll Call' Query: Returns ALL students in a class, joined with their 
     attendance record for the specific date (if it exists).
     """
-    # Create the condition for the attendance join
     attendance_conditions = [
         Attendance.student_id == Student.id,
         Attendance.attendance_date == target_date,
@@ -148,7 +141,7 @@ async def get_class_attendance_for_date(
 
     query = (
         select(Student, Attendance)
-        .join(Student.user) # Join User to get names for the UI
+        .join(Student.user)
         .options(joinedload(Student.user))
         .outerjoin(Attendance, and_(*attendance_conditions))
         .where(
@@ -158,5 +151,4 @@ async def get_class_attendance_for_date(
     )
     
     result = await db.execute(query)
-    # Returns a list of tuples: (Student_Object, Attendance_Object_Or_None)
     return list(result.all())

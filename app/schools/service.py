@@ -129,7 +129,7 @@ async def update_school_details(
     db.add(school)
     await db.commit()
 
-    # Re-fetch so academic_levels is eagerly loaded for the response
+    # Re-fetching so academic_levels is eagerly loaded for the response
     return await repository.get_school_by_id(db, school_id)
 
 

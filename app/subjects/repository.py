@@ -76,7 +76,7 @@ async def create_subject(db: AsyncSession, subject_in: SubjectCreate, school_id:
     
     await db.commit()
 
-    # Re-fetch to load relationships
+    # Re-fetching to load relationships
     return await get_subject_by_id(db, new_subject.id, school_id)
 
 async def assign_subjects_to_teacher(

@@ -32,7 +32,7 @@ async def create_new_exam(
     if current_user.role not in (UserRole.SCHOOL_ADMIN, UserRole.TEACHER):
         raise ForbiddenException("Unauthorized.")
 
-    # Checking for duplicates to prevent DB crash
+    # Checking for duplicates
     existing_exam = await repository.get_exam_by_details(
         db,
         current_user.school_id,

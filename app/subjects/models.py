@@ -34,7 +34,7 @@ class Subject(TenantModel):
         "Teacher",
         secondary="teacher_subjects",
         back_populates="assigned_subjects",
-        viewonly=True # We use this for reading names easily
+        viewonly=True
     )
 
     __table_args__ = (

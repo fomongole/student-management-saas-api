@@ -26,8 +26,6 @@ from app.parents.router import router as parents_router
 from app.reports.router import router as reports_router
 from fastapi.middleware.cors import CORSMiddleware
 
-
-# Application
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,

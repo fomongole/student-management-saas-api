@@ -83,7 +83,7 @@ async def create_class(db: AsyncSession, class_in: ClassCreate, school_id: uuid.
     db.add(new_class)
     await db.commit()
     
-    # We MUST re-fetch the object here so SQLAlchemy loads the form_teacher
+    # Re-fetching the object here so SQLAlchemy loads the form_teacher
     # relationship. This prevents the 500 error when Pydantic serializes the response.
     return await get_class_by_id(db, new_class.id, school_id)
 

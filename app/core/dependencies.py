@@ -24,7 +24,6 @@ async def get_current_user(
     Attach this to any endpoint that requires authentication.
     """
     try:
-        # Decode the token
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=["HS256"]
         )
@@ -42,7 +41,6 @@ async def get_current_user(
             detail="Token is missing subject identifier",
         )
         
-    # Fetch the user from the database
     user = await repository.get_user_by_id(db, user_id=uuid.UUID(token_data.sub))
     
     if not user:

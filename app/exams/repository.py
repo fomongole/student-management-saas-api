@@ -143,7 +143,6 @@ async def delete_exam_protected(db: AsyncSession, exam_id: uuid.UUID, school_id:
     """
     Checks if results exist before deleting to protect school data.
     """
-    # 1. Check if any marks are entered for this exam
     count_query = select(func.count(Result.id)).where(Result.exam_id == exam_id)
     result_count = (await db.execute(count_query)).scalar() or 0
     
@@ -153,7 +152,7 @@ async def delete_exam_protected(db: AsyncSession, exam_id: uuid.UUID, school_id:
             message="Cannot delete this exam because student marks have already been recorded. Please clear the marks first."
         )
         
-    # 2. If empty, proceed with hard delete
+    # If empty, proceed with hard delete
     stmt = delete(Exam).where(and_(Exam.id == exam_id, Exam.school_id == school_id))
     result = await db.execute(stmt)
     await db.commit()

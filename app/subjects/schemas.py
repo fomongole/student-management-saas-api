@@ -3,7 +3,6 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from app.core.enums import AcademicLevel
 from typing import Optional, List
 
-# Add teacher_id to the Create schema
 class SubjectCreate(BaseModel):
     name: str           
     code: str           
@@ -26,7 +25,6 @@ class SubjectTeacherBrief(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def extract_user_names(cls, data):
-        # If 'data' is a SQLAlchemy Teacher object
         if hasattr(data, 'user'):
             return {
                 "id": data.id,
@@ -50,7 +48,7 @@ class SubjectResponse(BaseModel):
     
 class SubjectAssignment(BaseModel):
     teacher_id: uuid.UUID
-    # We accept a list so an admin can assign 3-4 subjects in one click
+    # Accepting a list so an admin can assign 3-4 subjects in one click
     subject_ids: list[uuid.UUID]
 
 class TeacherSubjectResponse(BaseModel):
@@ -78,6 +76,6 @@ class TeacherSubjectDetailResponse(BaseModel):
     """Returns the actual subject details assigned to a teacher."""
     id: uuid.UUID
     teacher_id: uuid.UUID
-    subject: SubjectResponse  # Nested relationship data
+    subject: SubjectResponse
     
     model_config = ConfigDict(from_attributes=True)

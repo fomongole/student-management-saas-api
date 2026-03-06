@@ -30,7 +30,6 @@ class Teacher(TenantModel):
         UniqueConstraint('school_id', 'employee_number', name='_school_employee_uc'),
     )
 
-    # --- Relationships ---
     user: Mapped["User"] = relationship("User")
     
     assigned_subjects: Mapped[list["Subject"]] = relationship(

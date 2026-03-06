@@ -115,13 +115,6 @@ async def get_student_by_user_id(db: AsyncSession, user_id: uuid.UUID, school_id
     """
     Fetches a student profile using their linked User account ID.
 
-    Root-cause fix: the original function only joinedloaded `user` and
-    `class_relationship`, leaving `parents` as a lazy relationship. When
-    the service dict-ified the student and touched `student.parents`, it
-    triggered a lazy-load on a closed async session → 500 Internal Server
-    Error → the student dashboard showed only the name from the auth token
-    and nothing else.
-
     All three relationships that the service accesses must be eagerly loaded
     here. `selectinload` is used for `parents` because it's a many-to-many
     and plays better with async than `joinedload` for collections.
@@ -131,7 +124,7 @@ async def get_student_by_user_id(db: AsyncSession, user_id: uuid.UUID, school_id
         .options(
             joinedload(Student.user),
             joinedload(Student.class_relationship),
-            selectinload(Student.parents),   # ← was missing; caused the 500
+            selectinload(Student.parents),
         )
         .where(
             and_(Student.user_id == user_id, Student.school_id == school_id)
@@ -151,12 +144,12 @@ async def update_student_transaction(db: AsyncSession, student: Student, update_
         elif hasattr(student, key):
             setattr(student, key, value)
 
-    # SECURITY: Revoke login access if student is marked as non-active
+    # Revoking login access if student is marked as non-active
     if "enrollment_status" in update_data:
         if update_data["enrollment_status"] != "ACTIVE":
-            user.is_active = False  # Suspends login
+            user.is_active = False 
         else:
-            user.is_active = True   # Restores login
+            user.is_active = True 
 
     db.add(user)
     db.add(student)

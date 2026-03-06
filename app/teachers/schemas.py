@@ -3,12 +3,10 @@ from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from typing import Optional, List
 
 class TeacherCreate(BaseModel):
-    # User Account Details
     email: EmailStr
     password: str
     first_name: str
     last_name: str
-    # Professional Details
     qualification: str | None = None
     specialization: str | None = None
 
@@ -41,11 +39,9 @@ class TeacherResponse(BaseModel):
 
 class TeacherUpdate(BaseModel):
     """Schema for updating a teacher and their underlying User profile."""
-    # User Profile Fields
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     
-    # Professional Details
     employee_number: Optional[str] = None
     qualification: Optional[str] = None
     specialization: Optional[str] = None
