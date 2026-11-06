@@ -61,3 +61,8 @@ class TeacherSubject(TenantModel):
     __table_args__ = (
         UniqueConstraint('teacher_id', 'subject_id', name='_teacher_subject_uc'),
     )
+
+    subject: Mapped["Subject"] = relationship(
+        "Subject",
+        overlaps="assigned_teachers,assigned_subjects",
+    )

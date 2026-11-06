@@ -147,11 +147,15 @@ async def get_teacher_assignments(
     teacher_id: uuid.UUID, 
     school_id: uuid.UUID
 ) -> Sequence[TeacherSubject]:
-    query = select(TeacherSubject).options(joinedload(TeacherSubject.subject)).where(
+    query = select(TeacherSubject).options(
+        joinedload(TeacherSubject.subject)
+        .joinedload(Subject.assigned_teachers)
+        .joinedload(Teacher.user)
+    ).where(
         and_(TeacherSubject.teacher_id == teacher_id, TeacherSubject.school_id == school_id)
     )
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 # Safe, direct deletion
 async def delete_subject_direct(db: AsyncSession, subject_id: uuid.UUID, school_id: uuid.UUID) -> bool:
