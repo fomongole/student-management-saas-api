@@ -61,4 +61,5 @@ logs/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.dbdocker-compose.override.yml
+Thumbs.db
+docker-compose.override.yml
