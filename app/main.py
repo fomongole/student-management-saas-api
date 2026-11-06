@@ -64,6 +64,10 @@ app.include_router(parents_router, prefix=f"{settings.API_V1_STR}/parents", tags
 app.include_router(reports_router, prefix=f"{settings.API_V1_STR}/reports", tags=["Reports"])
 
 # Health check
+@app.get("/", tags=["System"])
+async def root():
+    return {"service": settings.PROJECT_NAME, "status": "ok"}
+
 @app.get("/health", tags=["System"])
 async def health_check():
     return {
